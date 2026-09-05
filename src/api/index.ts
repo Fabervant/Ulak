@@ -15,6 +15,7 @@ import { addMinutes, nowIso } from "../core/time";
 import { notifyMessage } from "../core/notify/dispatch";
 import { cors } from "./cors";
 import { runScheduled } from "../core/retention";
+import { uploadImage, codecFromEnv, claimImages, countClaimable, MAX_IMAGE_BYTES } from "../core/images";
 
 type Ctx = { Bindings: Env; Variables: AppVars };
 export const app = new Hono<Ctx>();
@@ -24,6 +25,7 @@ const memSubmitUser = new MemoryRateLimiter(3, 60);
 const memSubmitIp = new MemoryRateLimiter(10, 60);
 const memReadUser = new MemoryRateLimiter(2, 60);
 const memReadIp = new MemoryRateLimiter(120, 60);
+const memUploadUser = new MemoryRateLimiter(5, 60);
 
 app.onError((err) => {
   if (err instanceof ApiError) return err.toResponse();
@@ -97,10 +99,32 @@ app.post("/v1/messages", async (c) => {
     throw new ApiError(429, "rate_limited", "hourly limit reached", true, {}, { "Retry-After": "3600" });
   }
 
+  if (p.attachments.length && (await countClaimable(c.env.DB, tenant.id, p.user_ref, p.attachments)) !== p.attachments.length) {
+    throw new ApiError(400, "invalid_request", "an attachment id is unknown, already used, or not yours", false, { field: "attachments" });
+  }
+
   const statusOnReceipt = statusList(c.env)[0] ?? "pending";
   const { row, created } = await insertMessage(c.env.DB, p, statusOnReceipt);
+  if (created && p.attachments.length) await claimImages(c.env.DB, tenant.id, p.user_ref, row.id, p.attachments);
   if (created) c.executionCtx.waitUntil(notifyMessage(c.env, row));
   return c.json({ id: row.id, received_at: row.received_at }, created ? 201 : 200);
+});
+
+const imageTooLarge = () => new ApiError(413, "payload_too_large", `image exceeds ${MAX_IMAGE_BYTES} bytes`, false, { max_bytes: MAX_IMAGE_BYTES });
+
+app.post("/v1/images", requireAppKey(), async (c) => {
+  const tenant = c.get("app");
+  if (!tenant.images_enabled) throw new ApiError(403, "images_disabled", "this app does not accept images", false);
+  if (Number(c.req.header("content-length") ?? "0") > MAX_IMAGE_BYTES) throw imageTooLarge();
+  const user_ref = c.req.header("x-ulak-user-ref") ?? null;
+  if (user_ref !== null && (user_ref.length < 16 || user_ref.length > 128)) {
+    throw new ApiError(400, "invalid_request", "x-ulak-user-ref must be 16 to 128 characters", false, { field: "user_ref" });
+  }
+  await enforce([{ limiter: limiterFor(c.env.RL_UPLOAD_USER, memUploadUser), key: `up:${tenant.id}:${user_ref ?? clientIp(c.req.raw, c.env)}` }], 60);
+  const bytes = await c.req.raw.arrayBuffer();
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw imageTooLarge();
+  const { id } = await uploadImage(c.env, codecFromEnv(c.env), tenant, user_ref, bytes);
+  return c.json({ id }, 201);
 });
 
 function userRefParam(raw: string | undefined): string {
