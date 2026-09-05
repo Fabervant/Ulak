@@ -13,3 +13,6 @@ mcp/.env
 *.log
 .DS_Store
 test/hygiene-manifest.json
+
+# Session Prompt Recorder (local-only capture)
+.session_prompts/

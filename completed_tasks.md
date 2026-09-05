@@ -1,6 +1,35 @@
 # Completed tasks
 
-Newest first. Task numbers refer to `docs/superpowers/plans/2026-09-05-ulak.md`.
+## Session 1 — 2026-09-05/06
+
+Built Ulak from the specification to a deployable state and pushed it to the public repository.
+Tasks 1 to 15 of `docs/superpowers/plans/2026-09-05-ulak.md` are done; Task 16 (deploying the
+operator's instance) waits on operator-side credentials and approval.
+
+Decisions this session, with the reason where it is not obvious:
+
+- Hosting on Cloudflare Workers with D1 and R2. One free account covers compute, the SQLite-style
+  store, image storage, the scheduled job and edge rate limiting; it never sleeps and needs no card.
+  Cost accepted: TypeScript on the Workers runtime, so a stranger self-hosts on Cloudflare rather
+  than in a container.
+- Three hostnames on the operator's own domain, so the URL apps embed never changes.
+- Admin sign-in with Google OpenID Connect bound to the permanent account id, pinned on first
+  login. A renamed account cannot lock the admin out.
+- Admin surface in English only. Status labels for users are localised from locale files.
+- Status list: pending, viewed, in_progress, completed, rejected; pending on receipt; configurable.
+  The user's app may show the status. A status change alone notifies nobody; the app sees it on its
+  next poll.
+- A dedicated Telegram bot for Ulak, so its token and notification settings belong to Ulak alone.
+- Assistant access through a token-protected admin API and an MCP server in the repo. Drafting
+  happens in the assistant with the app's code in view; Ulak calls no AI provider, so the public
+  project stays vendor-neutral.
+- No hosted web form. No versioned phases: everything decided is in this build.
+- An idempotent replay is answered before the rate limiters run. The plan had the order reversed,
+  which would have given a client that missed a 201 a 429 on retry.
+- CI runs the gitleaks binary rather than the GitHub Action, which needs a paid licence for
+  organisations.
+
+Task record, newest first:
 
 - 2026-09-06: Task 15, documentation: README for a stranger, client contract, self-hosting runbook, privacy statement template, repository-hygiene test over every committed file.
 - 2026-09-06: Task 14, MCP server package over the admin API with five tools, its own test config, CI step.
