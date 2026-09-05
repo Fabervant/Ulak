@@ -1,0 +1,9 @@
+{
+  "status": {
+    "pending": "Pending",
+    "viewed": "Viewed",
+    "in_progress": "In progress",
+    "completed": "Completed",
+    "rejected": "Rejected"
+  }
+}

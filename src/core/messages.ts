@@ -77,3 +77,27 @@ export async function countUserMessagesSince(db: D1Database, app: string, user_r
 export async function touchActivity(db: D1Database, id: string, iso: string): Promise<void> {
   await db.prepare("UPDATE messages SET last_activity_at=? WHERE id=?").bind(iso, id).run();
 }
+
+export async function listForUser(db: D1Database, app: string, user_ref: string, sinceIso: string | null): Promise<MessageRow[]> {
+  const q = sinceIso
+    ? db.prepare("SELECT * FROM messages WHERE app=? AND user_ref=? AND last_activity_at>? ORDER BY last_activity_at, received_at LIMIT 200").bind(app, user_ref, sinceIso)
+    : db.prepare("SELECT * FROM messages WHERE app=? AND user_ref=? ORDER BY last_activity_at, received_at LIMIT 200").bind(app, user_ref);
+  return (await q.all<MessageRow>()).results;
+}
+
+export async function setStatus(db: D1Database, id: string, status: string): Promise<void> {
+  const r = await db.prepare("UPDATE messages SET status=?, last_activity_at=? WHERE id=?").bind(status, nowIso(), id).run();
+  if (!r.meta.changes) throw new Error("message not found");
+}
+
+/** Hard deletion of everything a user_ref owns in one app. Cascades take the replies; image rows go here, objects by the caller. */
+export async function deleteUser(db: D1Database, app: string, user_ref: string): Promise<{ deleted_messages: number; image_keys: string[] }> {
+  const keys = (await db.prepare("SELECT r2_key FROM images WHERE app=? AND user_ref=?").bind(app, user_ref).all<{ r2_key: string }>()).results.map((r) => r.r2_key);
+  // meta.changes would include cascaded reply rows, so count first.
+  const n = (await db.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).first<{ n: number }>())?.n ?? 0;
+  await db.batch([
+    db.prepare("DELETE FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref),
+    db.prepare("DELETE FROM images WHERE app=? AND user_ref=?").bind(app, user_ref),
+  ]);
+  return { deleted_messages: n, image_keys: keys };
+}

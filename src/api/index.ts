@@ -4,7 +4,11 @@ import { statusList } from "../core/env";
 import { ApiError } from "../core/errors";
 import { requireAppKey, type AppVars } from "../core/auth/appkey";
 import { validateSubmit, MAX_BODY_BYTES } from "../core/validate";
-import { insertMessage, countUserMessagesSince, findByIdempotency, bodyHash } from "../core/messages";
+import { insertMessage, countUserMessagesSince, findByIdempotency, bodyHash, listForUser, deleteUser } from "../core/messages";
+import { listRepliesFor } from "../core/replies";
+import { statusLabel } from "../core/locales";
+import { sha256Hex } from "../core/ids";
+import { isIso } from "../core/time";
 import { MemoryRateLimiter, limiterFor, enforce } from "../core/ratelimit";
 import { clientIp } from "../core/clientip";
 import { addMinutes, nowIso } from "../core/time";
@@ -17,6 +21,8 @@ export const app = new Hono<Ctx>();
 // Isolate-local fallbacks, used when the rate-limit bindings are absent (tests, local dev).
 const memSubmitUser = new MemoryRateLimiter(3, 60);
 const memSubmitIp = new MemoryRateLimiter(10, 60);
+const memReadUser = new MemoryRateLimiter(2, 60);
+const memReadIp = new MemoryRateLimiter(120, 60);
 
 app.onError((err) => {
   if (err instanceof ApiError) return err.toResponse();
@@ -94,6 +100,46 @@ app.post("/v1/messages", async (c) => {
   const { row, created } = await insertMessage(c.env.DB, p, statusOnReceipt);
   if (created) c.executionCtx.waitUntil(notifyMessage(c.env, row));
   return c.json({ id: row.id, received_at: row.received_at }, created ? 201 : 200);
+});
+
+function userRefParam(raw: string | undefined): string {
+  const u = raw ?? "";
+  if (u.length < 16 || u.length > 128) throw new ApiError(400, "invalid_request", "user_ref must be 16 to 128 characters", false, { field: "user_ref" });
+  return u;
+}
+
+app.get("/v1/messages", requireAppKey(), async (c) => {
+  const tenant = c.get("app");
+  const user_ref = userRefParam(c.req.query("user_ref"));
+  const since = c.req.query("since") ?? null;
+  if (since !== null && !isIso(since)) throw new ApiError(400, "invalid_request", "since must be ISO 8601", false, { field: "since" });
+  const limiters = [{ limiter: limiterFor(c.env.RL_READ_USER, memReadUser), key: `r:${tenant.id}:${user_ref}` }];
+  if (c.env.READ_IP_BACKSTOP === "true") limiters.push({ limiter: memReadIp, key: `rip:${clientIp(c.req.raw, c.env)}` });
+  await enforce(limiters, 60);
+
+  const rows = await listForUser(c.env.DB, tenant.id, user_ref, since);
+  const replies = await listRepliesFor(c.env.DB, rows.map((r) => r.id));
+  const messages = rows.map((r) => ({
+    id: r.id,
+    received_at: r.received_at,
+    last_activity_at: r.last_activity_at,
+    status: r.status,
+    status_label: statusLabel(r.status, r.locale),
+    message: r.message,
+    replies: (replies.get(r.id) ?? []).map((x) => ({ id: x.id, sender_role: x.sender_role, content: x.content, created_at: x.created_at })),
+  }));
+  const cursor = rows.length ? rows[rows.length - 1]!.last_activity_at : since;
+  const etag = `"${(await sha256Hex(JSON.stringify(messages))).slice(0, 32)}"`;
+  if (c.req.header("if-none-match") === etag) return new Response(null, { status: 304, headers: { etag } });
+  return c.json({ messages, cursor }, 200, { etag, "cache-control": "no-store" });
+});
+
+app.delete("/v1/messages", requireAppKey(), async (c) => {
+  const tenant = c.get("app");
+  const user_ref = userRefParam(c.req.query("user_ref"));
+  const { deleted_messages, image_keys } = await deleteUser(c.env.DB, tenant.id, user_ref);
+  c.executionCtx.waitUntil(Promise.all(image_keys.map((k) => c.env.IMAGES.delete(k))));
+  return c.json({ deleted_messages });
 });
 
 export default {

@@ -1,0 +1,9 @@
+{
+  "status": {
+    "pending": "Bekliyor",
+    "viewed": "Görüldü",
+    "in_progress": "İlgileniliyor",
+    "completed": "Tamamlandı",
+    "rejected": "Reddedildi"
+  }
+}
