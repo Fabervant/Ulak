@@ -2,5 +2,5 @@
 useDefault = true
 
 [allowlist]
-description = "Placeholders in committed example config"
-regexes = ['''REPLACE_ME''']
+description = "Placeholders in committed examples and docs"
+regexes = ['''REPLACE_ME''', '''ulak_[a-z0-9_-]+_\.\.\.''']

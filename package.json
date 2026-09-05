@@ -16,7 +16,9 @@
     "migrate:local": "wrangler d1 migrations apply ulak --local -c wrangler.api.jsonc",
     "migrate:remote": "wrangler d1 migrations apply ulak --remote -c wrangler.api.jsonc",
     "add-app": "node scripts/add-app.mjs",
-    "scan": "gitleaks git --redact --no-banner ."
+    "scan": "gitleaks git --redact --no-banner .",
+    "hygiene": "node scripts/hygiene-manifest.mjs",
+    "pretest": "node scripts/hygiene-manifest.mjs"
   },
   "dependencies": {
     "hono": "^4.13.0",

@@ -12,3 +12,4 @@ mcp/dist/
 mcp/.env
 *.log
 .DS_Store
+test/hygiene-manifest.json
