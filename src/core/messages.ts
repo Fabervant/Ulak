@@ -119,3 +119,27 @@ export async function expireMessages(db: D1Database, nowIso_: string): Promise<{
 export async function unnotified(db: D1Database, maxAttempts: number, limit = 50): Promise<MessageRow[]> {
   return (await db.prepare("SELECT * FROM messages WHERE notified_at IS NULL AND notify_attempts < ? ORDER BY received_at LIMIT ?").bind(maxAttempts, limit).all<MessageRow>()).results;
 }
+
+export async function listAdmin(db: D1Database, f: { app?: string; status?: string; sinceIso?: string; limit?: number } = {}): Promise<MessageRow[]> {
+  const where: string[] = [];
+  const binds: unknown[] = [];
+  if (f.app) {
+    where.push("app=?");
+    binds.push(f.app);
+  }
+  if (f.status) {
+    where.push("status=?");
+    binds.push(f.status);
+  }
+  if (f.sinceIso) {
+    where.push("last_activity_at>?");
+    binds.push(f.sinceIso);
+  }
+  const sql = `SELECT * FROM messages ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY received_at DESC LIMIT ?`;
+  const limit = Math.min(Math.max(1, f.limit || 100), 500);
+  return (await db.prepare(sql).bind(...binds, limit).all<MessageRow>()).results;
+}
+
+export async function countByAppAndStatus(db: D1Database, status: string): Promise<Array<{ app: string; n: number }>> {
+  return (await db.prepare("SELECT app, COUNT(*) n FROM messages WHERE status=? GROUP BY app ORDER BY app").bind(status).all<{ app: string; n: number }>()).results;
+}
