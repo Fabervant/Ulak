@@ -6,7 +6,7 @@
   "license": "MIT",
   "scripts": {
     "test": "vitest run --reporter verbose",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/hygiene-manifest.mjs && tsc --noEmit",
     "dev:api": "wrangler dev -c wrangler.api.jsonc",
     "dev:admin": "wrangler dev -c wrangler.admin.jsonc --port 8788",
     "dev:images": "wrangler dev -c wrangler.images.jsonc --port 8789",
