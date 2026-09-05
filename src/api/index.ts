@@ -14,6 +14,7 @@ import { clientIp } from "../core/clientip";
 import { addMinutes, nowIso } from "../core/time";
 import { notifyMessage } from "../core/notify/dispatch";
 import { cors } from "./cors";
+import { runScheduled } from "../core/retention";
 
 type Ctx = { Bindings: Env; Variables: AppVars };
 export const app = new Hono<Ctx>();
@@ -144,7 +145,7 @@ app.delete("/v1/messages", requireAppKey(), async (c) => {
 
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, _env: Env, _ctx: ExecutionContext): Promise<void> {
-    // Filled in Task 9.
+  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(runScheduled(env).then((r) => console.log("scheduled", JSON.stringify(r))));
   },
 };

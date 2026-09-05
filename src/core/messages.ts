@@ -101,3 +101,21 @@ export async function deleteUser(db: D1Database, app: string, user_ref: string):
   ]);
   return { deleted_messages: n, image_keys: keys };
 }
+
+/** Rows past their app's retention, measured from last activity. Deletes them and returns their image keys. */
+export async function expireMessages(db: D1Database, nowIso_: string): Promise<{ expired: number; image_keys: string[] }> {
+  const due = await db
+    .prepare(`SELECT m.id FROM messages m JOIN apps a ON a.id=m.app WHERE m.last_activity_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' || a.retention_days || ' days')`)
+    .bind(nowIso_)
+    .all<{ id: string }>();
+  const ids = due.results.map((r) => r.id);
+  if (!ids.length) return { expired: 0, image_keys: [] };
+  const ph = ids.map(() => "?").join(",");
+  const keys = (await db.prepare(`SELECT r2_key FROM images WHERE message_id IN (${ph})`).bind(...ids).all<{ r2_key: string }>()).results.map((r) => r.r2_key);
+  await db.prepare(`DELETE FROM messages WHERE id IN (${ph})`).bind(...ids).run();
+  return { expired: ids.length, image_keys: keys };
+}
+
+export async function unnotified(db: D1Database, maxAttempts: number, limit = 50): Promise<MessageRow[]> {
+  return (await db.prepare("SELECT * FROM messages WHERE notified_at IS NULL AND notify_attempts < ? ORDER BY received_at LIMIT ?").bind(maxAttempts, limit).all<MessageRow>()).results;
+}
