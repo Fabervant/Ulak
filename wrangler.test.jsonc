@@ -1,0 +1,18 @@
+{
+  "name": "ulak-test",
+  "main": "src/api/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "ulak", "database_id": "local-test", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }],
+  "vars": {
+    "STATUS_LIST": "pending,viewed,in_progress,completed,rejected",
+    "TRUST_X_FORWARDED_FOR": "false",
+    "CONTROLLER_NAME": "Example Operator",
+    "ADMIN_URL": "https://admin.example.invalid",
+    "IMAGES_URL": "https://images.example.invalid",
+    "ADMIN_BOOTSTRAP_EMAILS": "admin@example.invalid",
+    "GOOGLE_CLIENT_ID": "test-client-id",
+    "NOTIFIER": "none"
+  }
+}

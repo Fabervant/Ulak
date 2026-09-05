@@ -1,0 +1,20 @@
+// Copy to wrangler.admin.jsonc (gitignored) and replace every REPLACE_ME.
+// Secrets, set with `wrangler secret put -c wrangler.admin.jsonc <NAME>`:
+//   GOOGLE_CLIENT_SECRET, SESSION_SECRET, IMAGE_URL_SECRET
+{
+  "name": "ulak-admin",
+  "main": "src/admin/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [{ "pattern": "admin.REPLACE_ME.example", "custom_domain": true }],
+  "d1_databases": [{ "binding": "DB", "database_name": "ulak", "database_id": "REPLACE_ME", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }],
+  "vars": {
+    "STATUS_LIST": "pending,viewed,in_progress,completed,rejected",
+    "CONTROLLER_NAME": "REPLACE_ME",
+    "ADMIN_URL": "https://admin.REPLACE_ME.example",
+    "IMAGES_URL": "https://images.REPLACE_ME.example",
+    "ADMIN_BOOTSTRAP_EMAILS": "you@example.invalid",
+    "GOOGLE_CLIENT_ID": "REPLACE_ME.apps.googleusercontent.com"
+  }
+}

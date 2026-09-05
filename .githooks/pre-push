@@ -1,0 +1,4 @@
+#!/bin/sh
+# Refuse to push if gitleaks finds a secret anywhere in history.
+GL=$(command -v gitleaks || echo "C:/fabervant/_tools/gitleaks/gitleaks.exe")
+"$GL" git --redact --no-banner . || { echo "pre-push: gitleaks found a secret; push refused"; exit 1; }

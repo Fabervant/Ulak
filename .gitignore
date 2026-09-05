@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.dev.vars.*
+wrangler.api.jsonc
+wrangler.admin.jsonc
+wrangler.images.jsonc
+.mcp.json
+mcp/node_modules/
+mcp/dist/
+mcp/.env
+*.log
+.DS_Store

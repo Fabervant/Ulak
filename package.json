@@ -1,0 +1,32 @@
+{
+  "name": "ulak",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run --reporter verbose",
+    "typecheck": "tsc --noEmit",
+    "dev:api": "wrangler dev -c wrangler.api.jsonc",
+    "dev:admin": "wrangler dev -c wrangler.admin.jsonc --port 8788",
+    "dev:images": "wrangler dev -c wrangler.images.jsonc --port 8789",
+    "deploy:api": "wrangler deploy -c wrangler.api.jsonc",
+    "deploy:admin": "wrangler deploy -c wrangler.admin.jsonc",
+    "deploy:images": "wrangler deploy -c wrangler.images.jsonc",
+    "migrate:local": "wrangler d1 migrations apply ulak --local -c wrangler.api.jsonc",
+    "migrate:remote": "wrangler d1 migrations apply ulak --remote -c wrangler.api.jsonc",
+    "add-app": "node scripts/add-app.mjs",
+    "scan": "gitleaks git --redact --no-banner ."
+  },
+  "dependencies": {
+    "hono": "^4.13.0",
+    "jose": "^6.2.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260905.1",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.129.0"
+  }
+}

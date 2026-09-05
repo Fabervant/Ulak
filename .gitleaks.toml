@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Placeholders in committed example config"
+regexes = ['''REPLACE_ME''']

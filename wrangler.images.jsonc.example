@@ -1,0 +1,10 @@
+// Copy to wrangler.images.jsonc (gitignored) and replace every REPLACE_ME.
+// Secrets: IMAGE_URL_SECRET (the same value as the other two Workers)
+{
+  "name": "ulak-images",
+  "main": "src/images/index.ts",
+  "compatibility_date": "2025-09-01",
+  "routes": [{ "pattern": "images.REPLACE_ME.example", "custom_domain": true }],
+  "d1_databases": [{ "binding": "DB", "database_name": "ulak", "database_id": "REPLACE_ME", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }]
+}
