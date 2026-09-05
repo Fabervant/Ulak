@@ -13,3 +13,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm ci && npm run build && npm test
+        working-directory: mcp

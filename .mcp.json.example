@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "ulak": {
+      "command": "node",
+      "args": ["REPLACE_ME/Ulak/mcp/dist/server.js"],
+      "env": {
+        "ULAK_ADMIN_URL": "https://admin.REPLACE_ME.example",
+        "ULAK_ADMIN_TOKEN": "REPLACE_ME",
+        "ULAK_APP": "myapp"
+      }
+    }
+  }
+}
