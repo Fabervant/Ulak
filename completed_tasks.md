@@ -17,9 +17,11 @@ Deployment, on the operator's existing Cloudflare account:
   handshake, including against a hostname that does not exist.
 - Secrets set through Wrangler only, read back from each Worker to confirm. No secret was written
   to the repository or shown in the session.
-- The billing profile form was located and its fields identified: organisation name, a Business
-  account type and a tax number all live on the billing address form, not on the checkout page.
-  Whether the operator saved it was not confirmed in this session, so it is not claimed here.
+- The billing profile now carries the company as the invoice entity, with the account type set to
+  Business and the registered address rather than a residential one. Confirmed by reading the
+  saved profile back, not from the form being opened. The object storage subscription is active
+  and renews annually. Whether the tax number was entered is not visible in that summary and was
+  not confirmed.
 
 Defects found and fixed:
 
@@ -74,7 +76,9 @@ The scheduled job was watched across two firings. The first window after deploym
 the next ran on time and retried the notification it was given. The handler itself was proven
 separately against the live database.
 
-The scratch application used during verification, and everything it held, was deleted afterwards.
+Both applications used during verification were deleted afterwards along with everything they
+held, including their stored objects. The instance ends the session with no applications, no
+messages and an empty bucket: each real application will create its own key when there is one.
 
 ## Session 1 — 2026-09-05/06
 

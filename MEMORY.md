@@ -6,11 +6,9 @@ real instance. Next work is whatever a first real client application needs; noth
 in the build itself.
 
 ## To do
-- Confirm the Cloudflare billing profile was saved with the company name, Business account type
-  and the tax number. The form was found and filled in during Session 2 but the save was never
-  confirmed, so it must be checked rather than assumed.
-- Decide whether the `demo` application stays. It was created to verify that the admin surface can
-  create one, which it did. Its key is the only copy and lives outside the repository.
+- Check whether the tax number reached the billing profile. The company name, Business account
+  type and registered address are confirmed saved; the profile summary does not display the tax
+  field, so that one part is unverified. It belongs on the same billing address form.
 
 ## Operational notes
 - Rate limits: the per-user submit ceilings are counted in the database and are exact. The per-IP
