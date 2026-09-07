@@ -99,6 +99,29 @@ describe("POST /v1/messages", () => {
     expect(res.headers.get("retry-after")).toBe("60");
     expect(await res.json()).toMatchObject({ error: "rate_limited", retryable: true });
   });
+  it("429 on the 4th message in a minute even when the binding limiters allow everything", async () => {
+    // Production uses the Cloudflare rate-limit binding, which is approximate and will
+    // happily allow a 4th request. With always-allow limiters injected, the only thing
+    // that can still refuse is the D1 window count - which is the actual guarantee.
+    const allowAll = { limit: async () => ({ success: true }) };
+    const permissive = { ...env, RL_SUBMIT_USER: allowAll, RL_SUBMIT_IP: allowAll } as unknown as typeof env;
+    const send = async () => {
+      const req = new Request(url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "cf-connecting-ip": ip },
+        body: JSON.stringify(body()),
+      });
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(req, permissive, ctx);
+      await waitOnExecutionContext(ctx);
+      return res;
+    };
+    for (let i = 0; i < 3; i++) expect((await send()).status).toBe(201);
+    const res = await send();
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("60");
+    expect(await res.json()).toMatchObject({ error: "rate_limited", retryable: true });
+  });
   it("CORS preflight succeeds only for an origin some app listed", async () => {
     await updateApp(env.DB, "demo", { allowed_origins: ["https://app.example"] });
     const pre = (origin: string) =>

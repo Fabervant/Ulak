@@ -98,6 +98,8 @@ that keep six different queues from guessing differently:
 - Keep `client_ts` as the moment the user wrote the message, not the moment it was sent.
 
 Rate limits on submit: 3 per minute and 10 per hour per `user_ref`, plus a per-address backstop.
+The two per-`user_ref` limits are exact. The per-address backstop and the read limit are
+best-effort and counted per Cloudflare location, so do not rely on their precise thresholds.
 Assume your own cooldown on the device may be bypassed; the server enforces its own.
 
 ## `user_ref`

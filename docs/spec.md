@@ -199,6 +199,10 @@ Mandatory handling, all tested:
 - Per-`user_ref` limits first; per-IP behind them as a backstop. Submit: burst 3 per minute and 10
   per hour per `user_ref`; 10 per minute per IP. Read: 2 per minute per `user_ref`; per-IP off by
   default. Upload: 5 MB per minute per `user_ref`.
+- The per-`user_ref` submit limits are counted in the database on the write path and are exact.
+  The per-IP and read limits use Cloudflare's rate-limiting binding, which is approximate by
+  design and counted per Cloudflare location: treat those two as damping, not as guarantees.
+  A limit that must hold precisely belongs in the database, not in the binding.
 - The client IP is `CF-Connecting-IP`. `X-Forwarded-For` is trusted only when
   `TRUST_X_FORWARDED_FOR=true`, default false.
 - The client's own cooldown is assumed absent or lying.

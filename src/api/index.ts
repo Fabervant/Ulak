@@ -4,12 +4,12 @@ import { statusList } from "../core/env";
 import { ApiError } from "../core/errors";
 import { requireAppKey, type AppVars } from "../core/auth/appkey";
 import { validateSubmit, MAX_BODY_BYTES } from "../core/validate";
-import { insertMessage, countUserMessagesSince, findByIdempotency, bodyHash, listForUser, deleteUser } from "../core/messages";
+import { insertMessage, countUserSubmitWindows, findByIdempotency, bodyHash, listForUser, deleteUser } from "../core/messages";
 import { listRepliesFor } from "../core/replies";
 import { statusLabel } from "../core/locales";
 import { sha256Hex } from "../core/ids";
 import { isIso } from "../core/time";
-import { MemoryRateLimiter, limiterFor, enforce } from "../core/ratelimit";
+import { MemoryRateLimiter, limiterFor, enforce, SUBMIT_BURST_LIMIT, SUBMIT_HOURLY_LIMIT } from "../core/ratelimit";
 import { clientIp } from "../core/clientip";
 import { addMinutes, nowIso } from "../core/time";
 import { notifyMessage } from "../core/notify/dispatch";
@@ -95,8 +95,15 @@ app.post("/v1/messages", async (c) => {
   const limiters = [{ limiter: limiterFor(c.env.RL_SUBMIT_IP, memSubmitIp), key: `ip:${ip}` }];
   if (p.user_ref) limiters.unshift({ limiter: limiterFor(c.env.RL_SUBMIT_USER, memSubmitUser), key: `u:${tenant.id}:${p.user_ref}` });
   await enforce(limiters, 60); // 429 burst
-  if (p.user_ref && (await countUserMessagesSince(c.env.DB, tenant.id, p.user_ref, addMinutes(nowIso(), -60))) >= 10) {
-    throw new ApiError(429, "rate_limited", "hourly limit reached", true, {}, { "Retry-After": "3600" });
+  if (p.user_ref) {
+    const t = nowIso();
+    const { burst, hour } = await countUserSubmitWindows(c.env.DB, tenant.id, p.user_ref, addMinutes(t, -1), addMinutes(t, -60));
+    if (burst >= SUBMIT_BURST_LIMIT) {
+      throw new ApiError(429, "rate_limited", "too many requests; retry after the indicated seconds", true, {}, { "Retry-After": "60" });
+    }
+    if (hour >= SUBMIT_HOURLY_LIMIT) {
+      throw new ApiError(429, "rate_limited", "hourly limit reached", true, {}, { "Retry-After": "3600" });
+    }
   }
 
   if (p.attachments.length && (await countClaimable(c.env.DB, tenant.id, p.user_ref, p.attachments)) !== p.attachments.length) {

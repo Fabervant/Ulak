@@ -7,6 +7,7 @@ import { sniffImageType, purgeUnclaimedImages, getImage } from "../src/core/imag
 import { signImageUrl } from "../src/core/signedurl";
 import { addMinutes, nowIso } from "../src/core/time";
 import { PNG as png, JPG_WITH_GPS as jpg, SVG as svg } from "./fixtures";
+import { BindingCodec } from "../src/core/images";
 let key: string;
 let U: string;
 const hex = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -126,5 +127,33 @@ describe("image origin", () => {
     expect((await imagesWorker.fetch(new Request(url.replace(/sig=[0-9a-f]+/, "sig=00")), e, createExecutionContext())).status).toBe(403);
     const expired = await signImageUrl(secret, "https://images.example.invalid", id, Math.floor(Date.now() / 1000) - 1);
     expect((await imagesWorker.fetch(new Request(expired), e, createExecutionContext())).status).toBe(403);
+  });
+});
+
+describe("BindingCodec strips metadata the re-encoder leaves behind", () => {
+  // Cloudflare's transform keeps the EXIF copyright tag on JPEG by default and, as the first
+  // live deployment proved, can return GPS tags intact. The guarantee has to be ours, so this
+  // fakes a binding that hands back exactly what it was given - metadata and all.
+  const echoBinding = {
+    info: async () => ({ width: 8, height: 6 }),
+    input(stream: ReadableStream) {
+      return {
+        output: async () => ({ response: () => new Response(stream) }),
+      };
+    },
+  } as unknown as ImagesBinding;
+
+  const hasExif = (buf: ArrayBuffer) => {
+    const b = new Uint8Array(buf);
+    for (let i = 0; i < b.length - 3; i++) if (b[i] === 0xff && b[i + 1] === 0xe1) return true;
+    return false;
+  };
+
+  it("removes the EXIF segment from a JPEG the binding returns unchanged", async () => {
+    expect(hasExif(jpg.buffer.slice(0) as ArrayBuffer)).toBe(true); // the fixture really carries it
+    const out = await new BindingCodec(echoBinding).reencode(jpg.buffer.slice(0) as ArrayBuffer, "image/jpeg");
+    expect(hasExif(out)).toBe(false);
+    expect(new Uint8Array(out).slice(0, 2)).toEqual(new Uint8Array([0xff, 0xd8])); // still a JPEG
+    expect(out.byteLength).toBeLessThan(jpg.byteLength);
   });
 });

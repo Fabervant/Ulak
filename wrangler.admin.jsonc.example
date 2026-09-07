@@ -1,6 +1,9 @@
 // Copy to wrangler.admin.jsonc (gitignored) and replace every REPLACE_ME.
 // Secrets, set with `wrangler secret put -c wrangler.admin.jsonc <NAME>`:
 //   GOOGLE_CLIENT_SECRET, SESSION_SECRET, IMAGE_URL_SECRET
+// Optional secret STATUS_SECRET: when set, GET /status/<that value> answers 200 when healthy
+// and 503 when not, with no other data. It exists for uptime monitors that cannot send an
+// Authorization header. Leave it unset and the route stays 404.
 {
   "name": "ulak-admin",
   "main": "src/admin/index.ts",

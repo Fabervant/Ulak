@@ -37,7 +37,34 @@ export interface ImageCodec {
 
 const notRaster = () => new ApiError(415, "unsupported_media_type", "not a raster image", false);
 
-/** Production: the Images binding decodes and writes a fresh file, which drops all metadata. */
+/** Removes every JPEG metadata segment: APP1-APP15 (EXIF, XMP, ICC, IPTC/Photoshop) and
+ *  COM comments. APP0/JFIF is kept because decoders expect it and it carries only density.
+ *  Ulak strips metadata itself rather than trusting a re-encoder's defaults: Cloudflare's
+ *  transform keeps the EXIF copyright tag on JPEG by default, and defaults can change. */
+export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
+  const b = new Uint8Array(bytes);
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return bytes.slice(0);
+  const parts: Uint8Array[] = [b.subarray(0, 2)];
+  let i = 2;
+  while (i < b.length - 3 && b[i] === 0xff) {
+    const marker = b[i + 1]!;
+    if (marker === 0xda) break; // start of scan: image data follows, stop here
+    const len = dv(b).getUint16(i + 2);
+    const drop = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe;
+    if (!drop) parts.push(b.subarray(i, i + 2 + len));
+    i += 2 + len;
+  }
+  parts.push(b.subarray(i));
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0));
+  let off = 0;
+  for (const p of parts) {
+    out.set(p, off);
+    off += p.byteLength;
+  }
+  return out.buffer;
+}
+
+/** Production: the Images binding re-encodes, then Ulak strips the metadata it leaves behind. */
 export class BindingCodec implements ImageCodec {
   constructor(private img: ImagesBinding) {}
   async info(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
@@ -47,13 +74,16 @@ export class BindingCodec implements ImageCodec {
   }
   async reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer> {
     const out = await this.img.input(new Blob([bytes]).stream()).output({ format: type, quality: 85 });
-    return await out.response().arrayBuffer();
+    const encoded = await out.response().arrayBuffer();
+    // WebP and PNG output always drops EXIF; JPEG does not, so strip it ourselves.
+    return type === "image/jpeg" ? stripJpegMetadata(encoded) : encoded;
   }
 }
 
 const dv = (b: Uint8Array) => new DataView(b.buffer, b.byteOffset, b.byteLength);
 
-/** Tests and local dev without the binding: dimensions from headers; EXIF APP1 stripped from JPEG. Not for production. */
+/** Tests and local dev without the binding: dimensions from headers, no re-encoding.
+ *  Metadata is removed by the same stripper production uses. Not for production. */
 export class PassthroughCodec implements ImageCodec {
   async info(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
     const b = new Uint8Array(bytes);
@@ -77,26 +107,7 @@ export class PassthroughCodec implements ImageCodec {
     throw notRaster();
   }
   async reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer> {
-    if (type !== "image/jpeg") return bytes.slice(0);
-    const b = new Uint8Array(bytes);
-    const parts: Uint8Array[] = [b.subarray(0, 2)];
-    let i = 2;
-    while (i < b.length - 3 && b[i] === 0xff) {
-      const marker = b[i + 1]!;
-      if (marker === 0xda) break;
-      const len = dv(b).getUint16(i + 2);
-      if (marker !== 0xe1) parts.push(b.subarray(i, i + 2 + len));
-      i += 2 + len;
-    }
-    parts.push(b.subarray(i));
-    const total = parts.reduce((n, p) => n + p.byteLength, 0);
-    const out = new Uint8Array(total);
-    let off = 0;
-    for (const p of parts) {
-      out.set(p, off);
-      off += p.byteLength;
-    }
-    return out.buffer;
+    return type === "image/jpeg" ? stripJpegMetadata(bytes) : bytes.slice(0);
   }
 }
 

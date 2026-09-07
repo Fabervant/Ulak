@@ -74,6 +74,25 @@ export async function countUserMessagesSince(db: D1Database, app: string, user_r
   return r?.n ?? 0;
 }
 
+/** Per-user submit counts for the burst and hourly windows, in one round trip.
+ *  The Cloudflare rate-limit binding is approximate and cannot hold a limit this small,
+ *  so the guarantee lives here where it is exact and testable. */
+export async function countUserSubmitWindows(
+  db: D1Database,
+  app: string,
+  user_ref: string,
+  sinceBurstIso: string,
+  sinceHourIso: string,
+): Promise<{ burst: number; hour: number }> {
+  const r = await db
+    .prepare(
+      "SELECT SUM(CASE WHEN received_at>=?3 THEN 1 ELSE 0 END) burst, COUNT(*) hour FROM messages WHERE app=?1 AND user_ref=?2 AND received_at>=?4",
+    )
+    .bind(app, user_ref, sinceBurstIso, sinceHourIso)
+    .first<{ burst: number | null; hour: number | null }>();
+  return { burst: r?.burst ?? 0, hour: r?.hour ?? 0 };
+}
+
 export async function touchActivity(db: D1Database, id: string, iso: string): Promise<void> {
   await db.prepare("UPDATE messages SET last_activity_at=? WHERE id=?").bind(iso, id).run();
 }

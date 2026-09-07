@@ -19,6 +19,7 @@ import { listImagesFor, deleteImageObjects } from "../core/images";
 import { signImageUrl } from "../core/signedurl";
 import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/auth/admintoken";
 import { api } from "./api";
+import { runChecks } from "../core/checks";
 
 type Ctx = { Bindings: Env; Variables: AdminVars };
 const app = new Hono<Ctx>();
@@ -42,6 +43,25 @@ app.onError((err, c) => {
 
 // --- token-protected JSON API: mounted before the cookie gate ---
 app.route("/api", api);
+
+// --- unauthenticated health route for an external monitor ---
+// The secret lives in the path so monitors that cannot send headers still work. It returns
+// only a status code: 200 healthy, 503 not. No counts, no messages, nothing about the data.
+// A wrong secret and an unconfigured feature both give a bare 404, so probing cannot tell
+// which. It does not hide that the route exists - other unknown paths redirect to sign-in -
+// but the secret is 48 hex characters and is the only thing guarding it. Comparison is over
+// SHA-256 digests so a wrong guess cannot be narrowed down by timing.
+app.get("/status/:secret", async (c) => {
+  const expected = c.env.STATUS_SECRET;
+  if (!expected) return c.notFound();
+  const digest = async (v: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)));
+  const [a, b] = await Promise.all([digest(c.req.param("secret")), digest(expected)]);
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
+  if (diff !== 0) return c.notFound();
+  const { ok } = await runChecks(c.env.DB);
+  return c.json({ ok }, ok ? 200 : 503);
+});
 
 // --- sign-in ---
 app.get("/auth/login", (c) => {

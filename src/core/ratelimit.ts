@@ -42,3 +42,8 @@ export async function enforce(limiters: Array<{ limiter: RateLimiter; key: strin
     }
   }
 }
+
+/** Per-user submit ceilings enforced in D1. The binding limiter above is a cheap first
+ *  pass only: it is approximate by design and cannot hold a limit of this size. */
+export const SUBMIT_BURST_LIMIT = 3;
+export const SUBMIT_HOURLY_LIMIT = 10;

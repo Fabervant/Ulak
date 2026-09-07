@@ -25,6 +25,25 @@ describe("runChecks", () => {
     expect(r.ok).toBe(false);
     expect(r.unnotified_over_10m).toBe(1);
   });
+  it("reports stored image count and bytes without changing ok", async () => {
+    await createApp(env.DB, "demo");
+    const empty = await runChecks(env.DB);
+    expect(empty.stored_images).toBe(0);
+    expect(empty.stored_image_bytes).toBe(0);
+    const put = (id: string, bytes: number) =>
+      env.DB.prepare(
+        "INSERT INTO images (id,app,message_id,user_ref,r2_key,content_type,bytes,width,height,created_at) VALUES (?,?,NULL,NULL,?,?,?,?,?,?)",
+      )
+        .bind(id, "demo", `k/${id}`, "image/jpeg", bytes, 10, 10, nowIso())
+        .run();
+    await put(crypto.randomUUID(), 1200);
+    await put(crypto.randomUUID(), 3400);
+    const after = await runChecks(env.DB);
+    expect(after.stored_images).toBe(2);
+    expect(after.stored_image_bytes).toBe(4600);
+    // Storage is reported, never a failure condition: fresh unclaimed images are not a breach.
+    expect(after.ok).toBe(true);
+  });
   it("goes RED on a planted row past retention", async () => {
     await createApp(env.DB, "demo");
     const m = (await insertMessage(env.DB, mk(), "pending")).row;

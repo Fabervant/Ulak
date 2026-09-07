@@ -11,14 +11,12 @@
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }],
   "images": { "binding": "IMG" },
   "triggers": { "crons": ["17 * * * *"] },
-  "unsafe": {
-    "bindings": [
-      { "name": "RL_SUBMIT_USER", "type": "ratelimit", "namespace_id": "1001", "simple": { "limit": 3, "period": 60 } },
-      { "name": "RL_SUBMIT_IP", "type": "ratelimit", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } },
-      { "name": "RL_READ_USER", "type": "ratelimit", "namespace_id": "1003", "simple": { "limit": 2, "period": 60 } },
-      { "name": "RL_UPLOAD_USER", "type": "ratelimit", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
-    ]
-  },
+  "ratelimits": [
+    { "name": "RL_SUBMIT_USER", "namespace_id": "2001", "simple": { "limit": 3, "period": 60 } },
+    { "name": "RL_SUBMIT_IP", "namespace_id": "2002", "simple": { "limit": 10, "period": 60 } },
+    { "name": "RL_READ_USER", "namespace_id": "2003", "simple": { "limit": 2, "period": 60 } },
+    { "name": "RL_UPLOAD_USER", "namespace_id": "2004", "simple": { "limit": 5, "period": 60 } }
+  ],
   "vars": {
     "STATUS_LIST": "pending,viewed,in_progress,completed,rejected",
     "TRUST_X_FORWARDED_FOR": "false",

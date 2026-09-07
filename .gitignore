@@ -16,3 +16,6 @@ test/hygiene-manifest.json
 
 # Session Prompt Recorder (local-only capture)
 .session_prompts/
+
+# Local session state, not part of the project
+memory/

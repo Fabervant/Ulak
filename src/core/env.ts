@@ -21,6 +21,8 @@ export interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
   IMAGE_URL_SECRET?: string;
+  /** When set, GET /status/<this value> reports health to an external monitor. Unset disables the route. */
+  STATUS_SECRET?: string;
   NOTIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;

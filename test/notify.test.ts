@@ -78,3 +78,22 @@ describe("notifyMessage", () => {
     expect(after.message).toBe(row.message);
   });
 });
+
+describe("TelegramNotifier default transport", () => {
+  // The default fetchImpl is the only part of this class no injected mock ever exercises.
+  // An unbound global fetch works when called as a bare function but throws "Illegal
+  // invocation" the moment it is stored on an object and called as a method, which is
+  // exactly how send() calls it. Bound, it fails on DNS instead. Either way it rejects;
+  // only the reason distinguishes a correct default from a broken one.
+  it("binds fetch to the global scope so calling it as a method reaches the network", async () => {
+    const notifier = new TelegramNotifier("token", "chat");
+    const holder = { impl: (notifier as unknown as { fetchImpl: typeof fetch }).fetchImpl };
+    let reason = "";
+    try {
+      await holder.impl("https://ulak-binding-probe.invalid/");
+    } catch (e) {
+      reason = e instanceof Error ? e.message : String(e);
+    }
+    expect(reason).not.toMatch(/illegal invocation/i);
+  });
+});

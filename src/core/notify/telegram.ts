@@ -4,7 +4,7 @@ export class TelegramNotifier implements Notifier {
   constructor(
     private token: string,
     private chatId: string,
-    private fetchImpl: typeof fetch = fetch,
+    private fetchImpl: typeof fetch = fetch.bind(globalThis),
   ) {}
   async send(n: Notification): Promise<void> {
     const res = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/sendMessage`, {
