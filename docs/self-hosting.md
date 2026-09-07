@@ -14,6 +14,13 @@ You will end up with three Workers on three origins:
 They must be on different origins. Either use three `workers.dev` subdomains (free, no domain
 needed) or three hostnames on a domain you keep in Cloudflare.
 
+If you use your own domain, keep the three names **one level below the apex** - `ulak`,
+`ulak-admin`, `ulak-images` under `example.com`, not `api.ulak.example.com`. Cloudflare's free
+Universal SSL certificate covers the apex and one level of subdomain only, and a Workers custom
+domain does **not** issue its own certificate to fill the gap: a two-level name resolves, serves
+no certificate, and every HTTPS request to it fails the TLS handshake. Two levels need Advanced
+Certificate Manager, which is a paid add-on.
+
 ## 1. Prerequisites
 
 - Node.js 22 or newer.

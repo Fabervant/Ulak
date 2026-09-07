@@ -6,6 +6,11 @@ real instance. Next work is whatever a first real client application needs; noth
 in the build itself.
 
 ## To do
+- Audit every dependency-injection seam whose default only runs in production, and exercise that
+  default under the real runtime. Two of Session 2's four defects were test doubles diverging from
+  the real thing: an injected transport that hid a runtime rejection, and an image codec double
+  that stripped metadata correctly while the real codec did not. The seams never checked this way
+  are the image binding's dimension call, the signed-URL builder and the object-store access.
 - Check whether the tax number reached the billing profile. The company name, Business account
   type and registered address are confirmed saved; the profile summary does not display the tax
   field, so that one part is unverified. It belongs on the same billing address form.
