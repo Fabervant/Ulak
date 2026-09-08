@@ -1,10 +1,11 @@
 import type { Notification, Notifier } from "./notifier";
+import { defaultFetch } from "../http";
 
 export class TelegramNotifier implements Notifier {
   constructor(
     private token: string,
     private chatId: string,
-    private fetchImpl: typeof fetch = fetch.bind(globalThis),
+    private fetchImpl: typeof fetch = defaultFetch,
   ) {}
   async send(n: Notification): Promise<void> {
     const res = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/sendMessage`, {

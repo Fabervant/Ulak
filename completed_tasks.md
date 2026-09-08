@@ -1,5 +1,78 @@
 # Completed tasks
 
+## Session 3 — 2026-09-08
+
+Audited every dependency-injection seam whose default only runs in production and made the
+production side of each one executable. `test/seams.test.ts` is the audit; `docs/seam-audit.md`
+is its inventory, including the seams that cannot be closed from a test and what covers them
+instead. The suite went from 174 to 190 tests, all green, and the typecheck passes.
+
+What now drives the production default:
+
+- The test config binds the image service, so the whole suite takes the `BindingCodec` branch
+  instead of the passthrough. `info` is driven on PNG, JPEG, a vector and undecodable bytes;
+  `reencode` on both formats.
+- A test-only rate-limit namespace, `RL_PROBE`, drives `BindingRateLimiter` against the real
+  binding. The four production namespaces were deliberately not bound: that would route the
+  whole suite through the approximate limiter.
+- The signed-URL seam is driven end to end across two Workers — the URL the admin API actually
+  minted is fed to the image origin, rather than one the test assembled itself.
+- Object-store access gains the paths where the store and the database can disagree: a delete
+  over a key the store no longer holds, and whether the bucket holds anything unrecorded.
+- Both injectable transports now default to one exported `defaultFetch`, so a single probe
+  covers the Telegram notifier and the OpenID Connect token exchange.
+
+The defect the audit found, and the probe that corrected the fix:
+
+- A file whose bytes sniff as PNG but that the codec cannot decode escaped the handler as
+  `500 {"error":"internal","retryable":true}`. A client honouring the flag would resend a file
+  that can never succeed. The passthrough codec reads the header itself and never fails the way
+  a codec does, so nothing in the suite could see it.
+- The first fix mapped the documented "input is not an image" code, 9412, to 415 and everything
+  else to a retryable 503. With the owner's approval a throwaway application was created on the
+  live instance and two corrupt files uploaded. Both returned the 500, confirming the defect in
+  production, and `wrangler tail` gave the real code:
+  `IMAGES_INFO_ERROR 9516: ... error during decoding`. The live service says 9516, the local one
+  9523, the type definitions document 9412. The first fix would have classified the real
+  production error as a retryable outage — precisely the loop it was written to prevent.
+- The mapping now keys on shape, not number: the service threw with a numeric code means it read
+  the file and refused it, so 415 and never retryable, carrying `platform_code` for the operator;
+  no numeric code means it never got that far, so a retryable 503. The seam test asserts the rule
+  over any particular number, because pinning 9516 would describe today's live service the way
+  pinning 9412 described the type definitions.
+- The application was deleted immediately. A rejected upload writes no row and no object; the
+  database and the bucket were read back empty afterwards (0 apps, 0 messages, 0 images,
+  object_count 0).
+- `test/images.test.ts` asserted the image origin served bytes equal to the upload. That only
+  held under the passthrough codec, which does not re-encode. It now compares against what the
+  bucket holds.
+
+Other work:
+
+- Three GitHub CI failures the owner reported were traced and all are historical, fixed within
+  Session 1: two runs failed because the gitleaks Action requires a paid licence for
+  organisations, fixed by running the binary instead; the third failed because the typecheck ran
+  before the hygiene manifest existed, fixed by generating it first. Every run since is green.
+- The tax number on the Cloudflare billing profile is confirmed present alongside the company
+  name and the Business account type, read back from the billing address form by the owner. The
+  Wrangler OAuth token has no billing scope, so the API cannot read the profile.
+- The specification and the client contract now document the 415-versus-503 classification and
+  tell clients not to resend an undecodable file.
+
+Decisions:
+
+- Per-IP and read rate limits stay on the platform limiter (owner). Making the per-IP limit exact
+  requires storing per-IP counters, which contradicts a privacy statement that enumerates what is
+  stored and ends "Nothing else"; making the read limit exact turns every poll into a database
+  write, and at one poll per user per minute the free tier's write quota caps the instance near
+  seventy active users. The limit that actually protects the operator's Telegram — the submit
+  ceiling — is already exact in the database, and the specification already says which limits are
+  guarantees and which are damping.
+- A coded error from the image service means the client's file, not an outage (agent). Evidence
+  above: three implementations, three numbers, so a code list describes only where it was written.
+- The live probe was worth a production write (owner). It cost one row created and deleted and it
+  overturned a fix that would have shipped the bug it was meant to remove.
+
 ## Session 2 — 2026-09-07
 
 Deployed the operator's instance (Task 16) and ran the eight-step live verification. All eight

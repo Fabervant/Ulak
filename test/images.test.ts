@@ -123,7 +123,13 @@ describe("image origin", () => {
     expect(good.headers.get("content-disposition")).toBe("attachment");
     expect(good.headers.get("x-content-type-options")).toBe("nosniff");
     expect(good.headers.get("content-security-policy")).toBe("default-src 'none'");
-    expect(new Uint8Array(await good.arrayBuffer())).toEqual(png);
+    // Not the uploaded bytes: the production codec re-encodes, so what the origin serves is
+    // what the bucket holds. Comparing against the upload only ever passed because the suite
+    // ran the passthrough codec.
+    const stored = new Uint8Array(await (await env.IMAGES.get((await getImage(env.DB, id))!.r2_key))!.arrayBuffer());
+    const served = new Uint8Array(await good.arrayBuffer());
+    expect(served).toEqual(stored);
+    expect(sniffImageType(served)).toBe("image/png");
     expect((await imagesWorker.fetch(new Request(url.replace(/sig=[0-9a-f]+/, "sig=00")), e, createExecutionContext())).status).toBe(403);
     const expired = await signImageUrl(secret, "https://images.example.invalid", id, Math.floor(Date.now() / 1000) - 1);
     expect((await imagesWorker.fetch(new Request(expired), e, createExecutionContext())).status).toBe(403);

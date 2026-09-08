@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from "jose";
 import type { Env } from "../env";
+import { defaultFetch } from "../http";
 
 const ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 const JWKS_URL = new URL("https://www.googleapis.com/oauth2/v3/certs");
@@ -17,7 +18,7 @@ export function authUrl(env: Env, state: string, nonce: string, redirectUri: str
   return u.toString();
 }
 
-export async function exchangeCode(env: Env, code: string, redirectUri: string, fetchImpl: typeof fetch = fetch): Promise<{ id_token: string }> {
+export async function exchangeCode(env: Env, code: string, redirectUri: string, fetchImpl: typeof fetch = defaultFetch): Promise<{ id_token: string }> {
   const res = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },

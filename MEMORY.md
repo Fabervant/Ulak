@@ -1,24 +1,30 @@
 # Ulak memory
 
 ## Focus
-Deployed and live. All 16 plan tasks are done and the eight-step verification passed against the
-real instance. Next work is whatever a first real client application needs; nothing is outstanding
-in the build itself.
+Deployed and live. All 16 plan tasks are done, the eight-step verification passed against the real
+instance, and the injection-seam audit is closed. Next work is whatever a first real client
+application needs.
 
 ## To do
-- Audit every dependency-injection seam whose default only runs in production, and exercise that
-  default under the real runtime. Two of Session 2's four defects were test doubles diverging from
-  the real thing: an injected transport that hid a runtime rejection, and an image codec double
-  that stripped metadata correctly while the real codec did not. The seams never checked this way
-  are the image binding's dimension call, the signed-URL builder and the object-store access.
-- Check whether the tax number reached the billing profile. The company name, Business account
-  type and registered address are confirmed saved; the profile summary does not display the tax
-  field, so that one part is unverified. It belongs on the same billing address form.
+- Deploy the API Worker. The image-error fix of Session 3 is committed but not live: the running
+  instance still answers an undecodable upload with a retryable 500. No client is affected because
+  the instance has no applications. Deploying is the owner's call.
+- Rename the Cloudflare account. It is still `Cemil.gunes@gunak.com's Account`. Dashboard only:
+  Manage Account, Configurations, Account Name, Change Name. Cosmetic — the account id is
+  unchanged, so nothing in the Wrangler config or the deployed Workers depends on it.
 
 ## Operational notes
 - Rate limits: the per-user submit ceilings are counted in the database and are exact. The per-IP
-  and read limits use the platform limiter, which is approximate and counted per location. Do not
-  restate them as guarantees; the specification says which is which.
+  and read limits stay on the platform limiter, approximate and counted per location, by the
+  owner's ruling in Session 3 — exact per-IP would mean storing IP counters the privacy statement
+  says are not stored, and exact reads would make every poll a database write. Do not restate the
+  two as guarantees; the specification says which is which. Settled, not pending.
+- The image service reports a file it cannot decode with a different number in every
+  implementation: the live service 9516, the local one 9523, the type definitions document 9412.
+  Never switch on the code. The rule is the shape of the error, and it is in `src/core/images.ts`.
+- A corrupt upload must never answer a retryable 500: a client honouring the flag resends a file
+  that can never succeed. Coded error means the file, so 415 and not retryable; no code means the
+  service, so 503 and retryable.
 - Image metadata is stripped by Ulak, not by the re-encoder. The re-encoder keeps the EXIF
   copyright tag on JPEG by default and was observed returning GPS coordinates intact.
 - The scheduled job did not run in its first window after deployment and ran on time thereafter.
@@ -36,9 +42,13 @@ in the build itself.
 - [S1, 2026-09-05/06, ~3.7h] Spec, plan, full build, docs, CI.
 - [S2, 2026-09-07] Deployment, eight-step live verification, four defects fixed, storage totals and
   the health route added.
+- [S3, 2026-09-08, ~0.5h] Injection-seam audit: `test/seams.test.ts` and `docs/seam-audit.md`, 174
+  to 190 tests. Found a corrupt upload answering a retryable 500; a live probe gave the real codec
+  error number and overturned the first fix. VKN confirmed, rate limits ruled settled.
 
 ## Blockers
 None.
 
 ## Open decisions
-See To do.
+None. The rate-limit scope question was settled in Session 3; the two To do items are actions,
+not decisions.

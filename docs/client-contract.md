@@ -185,6 +185,11 @@ Returns `201 {"id": "…"}`. Limits: PNG, JPEG or WebP by content; 5 MB; 4096 pi
 message; 5 uploads per minute per user. Type is detected from the bytes, so a renamed file is
 rejected. Images are re-encoded on the server and stripped of all metadata, including location.
 
+A file that cannot be decoded — truncated, or not really the type its bytes claim — comes back
+`415 unsupported_media_type` with `retryable: false`. Do not resend it; ask the user for another
+file. `503 image_service_unavailable` is the image service failing rather than the file, and is
+retryable like any other `5xx`.
+
 ## Browser clients and CORS
 
 If your app runs in a browser, the operator must list your page's origin (scheme and host, for

@@ -93,6 +93,7 @@ again while reading, before JSON parsing. Over the cap: `413 payload_too_large`.
 | 413 | `payload_too_large` (adds `max_bytes`) | no |
 | 415 | `unsupported_media_type` | no |
 | 429 | `rate_limited` with `Retry-After` header | yes, after `Retry-After` |
+| 503 | `image_service_unavailable` (adds `platform_code`), image upload only | yes |
 | 5xx | `internal` | yes |
 
 **Encoding.** UTF-8 end to end. Turkish characters (ı, ş, ğ, İ) must survive storage, the
@@ -182,7 +183,11 @@ not claimed by a message within 15 minutes is deleted.
 Mandatory handling, all tested:
 
 1. Type is detected from the file's own bytes. Allowed: PNG, JPEG, WebP. SVG and everything else
-   is rejected with `415`.
+   is rejected with `415`. A file whose bytes sniff as one of the three but that the codec cannot
+   decode is also `415`, never a retryable `internal`: the codec's own error is mapped, so a
+   client honouring `retryable` never loops on a file that can never succeed. When the image
+   service fails for a reason other than the file, the answer is `503 image_service_unavailable`,
+   retryable, which is a different thing and is answered as one.
 2. Caps checked before decoding: 5 MB per file, 4096 pixels per side, 3 images per message.
 3. Every upload is decoded and re-encoded server-side. The client's bytes are never stored or
    served. Re-encoding strips all metadata, verified by a test that uploads a JPEG with GPS EXIF and

@@ -37,6 +37,27 @@ export interface ImageCodec {
 
 const notRaster = () => new ApiError(415, "unsupported_media_type", "not a raster image", false);
 
+/** The image service reports a file it cannot read by throwing its own error type, carrying a
+ *  numeric code. That is the client's file, not an outage, so it answers 415 and is never
+ *  retryable: a client honouring the flag would resend a file that can never succeed.
+ *
+ *  Do not switch on the code. Three implementations were observed giving three different
+ *  numbers for one undecodable PNG - the live service 9516, the local one 9523, and the type
+ *  definitions document 9412 - so a code list would only ever describe wherever it was written.
+ *  The numeric code is carried into the response for the operator instead of being matched on.
+ *
+ *  Anything thrown without a numeric code did not come from the service refusing the file, so
+ *  it stays a retryable 503. Neither branch may fall through to the generic 500, which is what
+ *  the live instance answered before this existed. */
+function asImageError(e: unknown): ApiError {
+  if (e instanceof ApiError) return e;
+  const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: unknown }).code : undefined;
+  if (typeof code === "number") {
+    return new ApiError(415, "unsupported_media_type", "the image could not be decoded; it may be incomplete or damaged", false, { platform_code: code });
+  }
+  return new ApiError(503, "image_service_unavailable", "the image service could not process this upload; retry shortly", true);
+}
+
 /** Removes every JPEG metadata segment: APP1-APP15 (EXIF, XMP, ICC, IPTC/Photoshop) and
  *  COM comments. APP0/JFIF is kept because decoders expect it and it carries only density.
  *  Ulak strips metadata itself rather than trusting a re-encoder's defaults: Cloudflare's
@@ -68,13 +89,24 @@ export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
 export class BindingCodec implements ImageCodec {
   constructor(private img: ImagesBinding) {}
   async info(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
-    const i = await this.img.info(new Blob([bytes]).stream());
+    let i;
+    try {
+      i = await this.img.info(new Blob([bytes]).stream());
+    } catch (e) {
+      throw asImageError(e);
+    }
+    // A vector answers without a width. It is not a raster and Ulak never stores one.
     if (!("width" in i)) throw notRaster();
     return { width: i.width, height: i.height };
   }
   async reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer> {
-    const out = await this.img.input(new Blob([bytes]).stream()).output({ format: type, quality: 85 });
-    const encoded = await out.response().arrayBuffer();
+    let encoded: ArrayBuffer;
+    try {
+      const out = await this.img.input(new Blob([bytes]).stream()).output({ format: type, quality: 85 });
+      encoded = await out.response().arrayBuffer();
+    } catch (e) {
+      throw asImageError(e);
+    }
     // WebP and PNG output always drops EXIF; JPEG does not, so strip it ourselves.
     return type === "image/jpeg" ? stripJpegMetadata(encoded) : encoded;
   }

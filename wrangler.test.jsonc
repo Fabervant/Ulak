@@ -5,6 +5,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [{ "binding": "DB", "database_name": "ulak", "database_id": "local-test", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }],
+  "images": { "binding": "IMG" },
+  // Not one of the four production namespaces: a probe so the seam test can exercise
+  // BindingRateLimiter against the real binding without routing the whole suite through it.
+  "ratelimits": [{ "name": "RL_PROBE", "namespace_id": "9001", "simple": { "limit": 2, "period": 60 } }],
   "vars": {
     "STATUS_LIST": "pending,viewed,in_progress,completed,rejected",
     "TRUST_X_FORWARDED_FOR": "false",
