@@ -1,19 +1,16 @@
 # Ulak memory
 
 ## Focus
-Deployed and live. All 16 plan tasks are done, the eight-step verification passed against the real
-instance, and the injection-seam audit is closed. Next work is whatever a first real client
-application needs.
+Deployed and live, independently reviewed (Session 4), and the first client application is
+created. Next work is whatever that client's integration asks of the contract.
 
 ## To do
-- Deploy all three Workers. Committed but not live: the Session 3 image-error fix (API Worker:
-  an undecodable upload still answers a retryable 500) and the Session 4 sign-out fixes (admin
-  Worker: logout leaves the OAuth state cookie, forms accept autofill; images Worker: the download
-  is `max-age=0`, not `no-store`). No client is affected because the instance has no applications.
-  Deploying is the owner's call.
-- Rename the Cloudflare account. It is still `Cemil.gunes@gunak.com's Account`. Dashboard only:
-  Manage Account, Configurations, Account Name, Change Name. Cosmetic — the account id is
-  unchanged, so nothing in the Wrangler config or the deployed Workers depends on it.
+None.
+
+## Consumers
+- The first client application exists on the live instance (Session 4); its identity, origins and
+  key location are in the operator's private notes, not here, because this repository is public.
+  Before removing or changing anything in the client contract, tell that client and wait.
 
 ## Operational notes
 - Rate limits: the per-user submit ceilings are counted in the database and are exact. The per-IP
@@ -49,6 +46,9 @@ application needs.
 - [S3, 2026-09-08, ~0.5h] Injection-seam audit: `test/seams.test.ts` and `docs/seam-audit.md`, 174
   to 190 tests. Found a corrupt upload answering a retryable 500; a live probe gave the real codec
   error number and overturned the first fix. VKN confirmed, rate limits ruled settled.
+- [S4, 2026-09-19, ~1.7h] Sign-out audit (3 stores fixed), deploy, independent review (5 findings
+  fixed, parallel-submit limit the worst), account renamed, first client created. `5d0314c`,
+  `3770c97`.
 
 ## Blockers
 None.

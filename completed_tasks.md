@@ -1,5 +1,37 @@
 # Completed tasks
 
+## Session 4 — 2026-09-19
+
+Mailbox, sign-out audit, the Session 3 carry-overs, an independent review, and the first client.
+
+- **Sign-out (system_designer letter of 2026-09-15, owner rule S164).** The admin panel's
+  device-side stores were driven in tests. Three survived: the OAuth state cookie `ulak_oauth`
+  (never cleared by the callback nor by logout), the image origin's `private, max-age=0`, and the
+  typed forms with no `autocomplete="off"`. Fixed in `5d0314c`; the callback's success path now has
+  local coverage (pool-workers 0.22 dropped `fetchMock`, so `test/admin.test.ts` stubs the
+  transport with `vi.mock`). Reply letter written, both letters archived.
+- **Deploy (owner).** All three Workers deployed; live read-back of the login cookie and a forged
+  callback. Live probe (owner-approved): throwaway app, corrupt PNG answered `415`,
+  `retryable:false`, `platform_code:9516`; app deleted, counts and bucket read back to zero.
+- **Independent review** of `9acf14c..3abc5a3` by `/code-review`. Five findings, each verified
+  against the code, each fixed behind a test that failed first, in `3770c97`:
+  parallel submits beat the per-user limit (six at once made six rows; the insert now carries
+  both window counts in its WHERE clause, one atomic statement); every coded image error was a
+  415 even for a service timeout (five documented service-condition codes now answer a retryable
+  503 - rationale: telling a client to discard a good file mirrors the loop the 415 prevents; 9516
+  stays 415 because it was observed live for a corrupt file although the docs call it internal);
+  APP14 was stripped (kept now: it holds only the colour-transform flag); a stray empty `img`
+  file; a dead export. The hourly limit got its first test. 193 to 200 tests. Deployed and pushed
+  on the owner's word.
+- **Cloudflare account renamed** to `Fabervant` by the owner; read back with `wrangler whoami`,
+  account id unchanged.
+- **First client (owner).** Application created for the client the owner chose, with its key saved
+  to the owner's credential folder and never printed. Live with the real key: CORS allows the
+  client's origin and no other, six parallel sends gave exactly three 201 and three 429, a corrupt
+  image gave 415. Test rows deleted; the instance reads one app and nothing else. The client was
+  told by letter; its code was not touched (owner). Its identity lives in private notes because
+  this repository is public.
+
 ## Session 3 — 2026-09-08
 
 Audited every dependency-injection seam whose default only runs in production and made the
