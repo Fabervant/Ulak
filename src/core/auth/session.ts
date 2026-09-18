@@ -45,3 +45,16 @@ export function sessionCookie(value: string, maxAgeSec = SESSION_TTL_SEC): strin
 export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
+
+/** The sign-in state cookie: one state and nonce, scoped to the auth routes, spent by the callback. */
+export const OAUTH_COOKIE = "ulak_oauth";
+export const OAUTH_TTL_SEC = 600;
+
+export function oauthCookie(state: string, nonce: string): string {
+  return `${OAUTH_COOKIE}=${state}.${nonce}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${OAUTH_TTL_SEC}`;
+}
+
+/** Same Path as the setter, or the browser keeps the original. */
+export function clearOauthCookie(): string {
+  return `${OAUTH_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=0`;
+}

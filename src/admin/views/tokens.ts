@@ -24,7 +24,7 @@ export function tokensView(tokens: AdminTokenRow[], csrf: string, created?: { na
     </table>
     <h3>New token</h3>
     <p>For the admin API and the MCP server. Full admin scope; revoke when a device is lost.</p>
-    <form method="post" action="/tokens">
+    <form method="post" action="/tokens" autocomplete="off">
       <input type="hidden" name="csrf" value="${csrf}" />
       <input name="name" required placeholder="where it will live, e.g. laptop" />
       <button>Create</button>

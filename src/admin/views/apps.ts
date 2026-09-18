@@ -12,7 +12,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
         (a) => html`<tr>
           <td>${a.id}</td>
           <td>
-            <form method="post" action="/apps/${a.id}">
+            <form method="post" action="/apps/${a.id}" autocomplete="off">
               <input type="hidden" name="csrf" value="${csrf}" />
               <input name="retention_days" type="number" min="1" max="3650" value="${a.retention_days}" class="narrow" />
               <label><input type="checkbox" name="images_enabled" ${a.images_enabled ? "checked" : ""} class="narrow" /> images</label>
@@ -27,7 +27,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
       )}
     </table>
     <h3>New app</h3>
-    <form method="post" action="/apps">
+    <form method="post" action="/apps" autocomplete="off">
       <input type="hidden" name="csrf" value="${csrf}" />
       <input name="id" pattern="[a-z0-9_-]{2,32}" required placeholder="app id, e.g. myapp" />
       <input name="retention_days" type="number" value="90" min="1" max="3650" />

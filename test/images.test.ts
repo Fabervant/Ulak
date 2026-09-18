@@ -123,6 +123,9 @@ describe("image origin", () => {
     expect(good.headers.get("content-disposition")).toBe("attachment");
     expect(good.headers.get("x-content-type-options")).toBe("nosniff");
     expect(good.headers.get("content-security-policy")).toBe("default-src 'none'");
+    // no-store, not max-age=0: the latter lets the browser keep the body on disk and only
+    // revalidate, so an end user's screenshot would survive the admin signing out.
+    expect(good.headers.get("cache-control")).toBe("private, no-store");
     // Not the uploaded bytes: the production codec re-encodes, so what the origin serves is
     // what the bucket holds. Comparing against the upload only ever passed because the suite
     // ran the passthrough codec.

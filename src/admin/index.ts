@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
+import { getCookie } from "hono/cookie";
 import type { Env } from "../core/env";
 import { statusList } from "../core/env";
 import { ApiError } from "../core/errors";
@@ -10,7 +10,7 @@ import { detailView } from "./views/detail";
 import { appsView } from "./views/apps";
 import { tokensView } from "./views/tokens";
 import { authUrl, exchangeCode, verifyIdToken } from "../core/auth/google";
-import { createSession, sessionCookie, clearSessionCookie } from "../core/auth/session";
+import { createSession, sessionCookie, clearSessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie } from "../core/auth/session";
 import { bootstrapAdmin } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
@@ -67,27 +67,33 @@ app.get("/status/:secret", async (c) => {
 app.get("/auth/login", (c) => {
   const state = crypto.randomUUID();
   const nonce = crypto.randomUUID();
-  setCookie(c, "ulak_oauth", `${state}.${nonce}`, { httpOnly: true, secure: true, sameSite: "Lax", path: "/auth", maxAge: 600 });
+  c.header("set-cookie", oauthCookie(state, nonce));
   return c.redirect(authUrl(c.env, state, nonce, `${c.env.ADMIN_URL}/auth/callback`), 302);
 });
 
 app.get("/auth/callback", async (c) => {
-  const [state, nonce] = (getCookie(c, "ulak_oauth") ?? "").split(".");
+  const [state, nonce] = (getCookie(c, OAUTH_COOKIE) ?? "").split(".");
   const code = c.req.query("code");
   if (!state || !nonce || c.req.query("state") !== state || !code) return c.text("sign-in state mismatch; start again at /auth/login", 400);
+  // The state matched, so it is spent whatever happens next; the header survives an error response.
+  c.header("set-cookie", clearOauthCookie());
   const { id_token } = await exchangeCode(c.env, code, `${c.env.ADMIN_URL}/auth/callback`);
   const who = await verifyIdToken(c.env, id_token, nonce);
   const admin = await bootstrapAdmin(c.env.DB, c.env, who.sub, who.email, who.email_verified); // 403 not_an_admin otherwise
   if (!c.env.SESSION_SECRET) return c.text("SESSION_SECRET not configured", 500);
-  c.header("set-cookie", sessionCookie(await createSession(c.env.SESSION_SECRET, admin.sub)));
+  c.header("set-cookie", sessionCookie(await createSession(c.env.SESSION_SECRET, admin.sub)), { append: true });
   return c.redirect("/", 302);
 });
 
 app.use("/*", requireAdmin());
 
+// Sign-out leaves the browser as on a first visit: both cookies the panel ever sets are
+// expired here, on their own paths. The pages are already no-store and the forms opt out of
+// autofill, so nothing else of the admin's remains on the device.
 app.post("/auth/logout", async (c) => {
   await readForm(c);
   c.header("set-cookie", clearSessionCookie());
+  c.header("set-cookie", clearOauthCookie(), { append: true });
   return c.redirect("/auth/login", 303);
 });
 

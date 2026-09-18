@@ -6,9 +6,11 @@ instance, and the injection-seam audit is closed. Next work is whatever a first 
 application needs.
 
 ## To do
-- Deploy the API Worker. The image-error fix of Session 3 is committed but not live: the running
-  instance still answers an undecodable upload with a retryable 500. No client is affected because
-  the instance has no applications. Deploying is the owner's call.
+- Deploy all three Workers. Committed but not live: the Session 3 image-error fix (API Worker:
+  an undecodable upload still answers a retryable 500) and the Session 4 sign-out fixes (admin
+  Worker: logout leaves the OAuth state cookie, forms accept autofill; images Worker: the download
+  is `max-age=0`, not `no-store`). No client is affected because the instance has no applications.
+  Deploying is the owner's call.
 - Rename the Cloudflare account. It is still `Cemil.gunes@gunak.com's Account`. Dashboard only:
   Manage Account, Configurations, Account Name, Change Name. Cosmetic — the account id is
   unchanged, so nothing in the Wrangler config or the deployed Workers depends on it.

@@ -21,7 +21,7 @@ app.get("/i/:id", async (c) => {
       "content-disposition": "attachment",
       "x-content-type-options": "nosniff",
       "content-security-policy": "default-src 'none'",
-      "cache-control": "private, max-age=0",
+      "cache-control": "private, no-store",
     },
   });
 });

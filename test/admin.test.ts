@@ -1,11 +1,16 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import admin from "../src/admin/index";
 import { createApp } from "../src/core/apps";
 import { insertMessage, getMessage } from "../src/core/messages";
 import { validateSubmit } from "../src/core/validate";
 import { createSession, readSession } from "../src/core/auth/session";
 import { listReplies } from "../src/core/replies";
+
+// The callback test below needs Google to answer. This file's copy of the production transport
+// is a stub that this file programs; `test/seams.test.ts` still exercises the real one.
+const { outbound } = vi.hoisted(() => ({ outbound: vi.fn<typeof fetch>() }));
+vi.mock("../src/core/http", () => ({ defaultFetch: (...args: Parameters<typeof fetch>) => outbound(...args) }));
 
 const E = { ...env, SESSION_SECRET: "s3", IMAGE_URL_SECRET: "i3" };
 let cookie: string;
@@ -107,9 +112,94 @@ describe("admin surface", () => {
     expect((await form(`/tokens/${id}/revoke`, {})).status).toBe(303);
     expect((await env.DB.prepare("SELECT revoked_at FROM admin_tokens WHERE id=?").bind(id).first<{ revoked_at: string | null }>())!.revoked_at).not.toBeNull();
   });
-  it("logout clears the cookie", async () => {
+});
+
+// The panel is server-rendered with a CSP that forbids scripts, so the browser-side stores a
+// signed-in admin can leave behind are exactly these: the two cookies the panel sets, the HTTP
+// cache, and the browser's own form-autofill memory. Sign-out has to empty all of them, and the
+// sign-in that consumed the OAuth state must not leave that state lying around either.
+describe("sign-out leaves the browser a stranger", () => {
+  const setCookies = (res: Response) => res.headers.getSetCookie();
+  const cleared = (cookies: string[], name: string, path: string) => cookies.find((c) => c.startsWith(`${name}=;`) && c.includes("Max-Age=0") && c.includes(`Path=${path}`));
+
+  it("sign-out expires the session cookie and the OAuth state cookie on their own paths", async () => {
     const res = await form("/auth/logout", {});
     expect(res.status).toBe(303);
-    expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(res.headers.get("location")).toBe("/auth/login");
+    const cookies = setCookies(res);
+    expect(cleared(cookies, "ulak_admin", "/")).toBeDefined();
+    expect(cleared(cookies, "ulak_oauth", "/auth")).toBeDefined();
+    expect(cookies).toHaveLength(2);
+  });
+
+  it("every response is no-store, so nothing the admin saw sits in the HTTP cache", async () => {
+    for (const path of ["/", "/apps", "/tokens", "/auth/login"]) {
+      const res = await req(path);
+      expect(res.headers.get("cache-control"), path).toBe("no-store");
+    }
+    expect((await form("/auth/logout", {})).headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("every form that takes typed text opts out of browser autofill", async () => {
+    const m = (await insertMessage(env.DB, mk(), "pending")).row;
+    await env.DB.prepare("INSERT INTO admin_tokens (id,name,token_hash,created_at) VALUES ('t1','laptop','h','2026-01-01T00:00:00.000Z')").run();
+    for (const path of ["/", "/apps", "/tokens", `/m/${m.id}`]) {
+      const html = await (await req(path)).text();
+      // Split on form tags; each chunk starts with that form's attributes and holds its fields.
+      for (const chunk of html.split("<form").slice(1)) {
+        const tag = chunk.slice(0, chunk.indexOf(">"));
+        const fields = chunk.slice(0, chunk.indexOf("</form>"));
+        const typed = /<(input(?![^>]*type="(hidden|checkbox)")|textarea)/.test(fields);
+        if (typed) expect(tag, `${path}: <form${tag}>`).toContain('autocomplete="off"');
+      }
+    }
+  });
+
+  it("the callback consumes the OAuth state cookie whether the exchange succeeds or fails", async () => {
+    const { generateKeyPair, exportJWK, SignJWT } = await import("jose");
+    const cb = (state: string, nonce: string, queryState = state) =>
+      admin.fetch(new Request(`https://admin.example.invalid/auth/callback?state=${queryState}&code=c1`, { headers: { cookie: `ulak_oauth=${state}.${nonce}` } }), E, createExecutionContext());
+    const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+
+    // A state mismatch is a request the cookie did not authorise: the cookie stays, the flow restarts.
+    const mismatch = await cb("s0", "n0", "forged");
+    expect(mismatch.status).toBe(400);
+    expect(setCookies(mismatch)).toHaveLength(0);
+    expect(outbound).not.toHaveBeenCalled();
+
+    // The exchange fails after the state matched: the state is spent and the cookie goes with it.
+    outbound.mockResolvedValueOnce(new Response("nope", { status: 500 }));
+    const failed = await cb("s1", "n1");
+    expect(failed.status).toBe(500);
+    expect(cleared(setCookies(failed), "ulak_oauth", "/auth")).toBeDefined();
+
+    // The exchange succeeds: the session cookie is set and the state cookie is cleared in the same response.
+    const { publicKey, privateKey } = await generateKeyPair("RS256");
+    const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "RS256", use: "sig" };
+    const idToken = await new SignJWT({ email: "a@example.invalid", email_verified: true, nonce: "n2" })
+      .setProtectedHeader({ alg: "RS256", kid: "k1" })
+      .setIssuer("https://accounts.google.com")
+      .setAudience(E.GOOGLE_CLIENT_ID ?? "")
+      .setSubject("sub-1")
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(privateKey);
+    outbound.mockResolvedValueOnce(json({ id_token: idToken }));
+    // jose fetches the key set through the global fetch, not through Ulak's transport.
+    vi.stubGlobal("fetch", vi.fn(async () => json({ keys: [jwk] })));
+    try {
+      const ok = await cb("s2", "n2");
+      expect(ok.status).toBe(302);
+      expect(ok.headers.get("location")).toBe("/");
+      const cookies = setCookies(ok);
+      expect(cleared(cookies, "ulak_oauth", "/auth")).toBeDefined();
+      const session = cookies.find((c) => c.startsWith("ulak_admin=") && !c.startsWith("ulak_admin=;"));
+      expect(session).toBeDefined();
+      expect(await readSession("s3", session!.split(";")[0]!.slice("ulak_admin=".length))).toMatchObject({ sub: "sub-1" });
+      expect(outbound).toHaveBeenCalledTimes(2);
+      expect(outbound.mock.calls[1]![0]).toBe("https://oauth2.googleapis.com/token");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -37,7 +37,7 @@ export function detailView(m: MessageRow, replies: ReplyRow[], imageUrls: string
     ${imageUrls.length ? html`<h3>Images</h3>${imageUrls.map((u, i) => html`<p><a href="${u}">download image ${i + 1}</a></p>`)}` : ""}
     <h3>Replies</h3>
     ${replies.map((r) => html`<pre><strong>${r.sender_role}</strong> ${r.created_at}\n${r.content}</pre>`)}
-    <form method="post" action="/m/${m.id}/reply">
+    <form method="post" action="/m/${m.id}/reply" autocomplete="off">
       <input type="hidden" name="csrf" value="${csrf}" />
       <textarea name="content" rows="5" required placeholder="Reply in the user's language (${m.locale ?? "unknown locale"})"></textarea>
       <button>Send reply</button>
