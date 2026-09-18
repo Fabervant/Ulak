@@ -40,7 +40,22 @@ export async function findByIdempotency(db: D1Database, app: string, user_ref: s
   return db.prepare("SELECT * FROM messages WHERE app=? AND COALESCE(user_ref,'')=? AND client_msg_id=?").bind(app, user_ref ?? "", client_msg_id).first<MessageRow>();
 }
 
-export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnReceipt: string): Promise<{ row: MessageRow; created: boolean }> {
+/** The per-user submit ceilings, counted over the two windows that end now. */
+export interface SubmitWindows {
+  sinceBurstIso: string;
+  burstLimit: number;
+  sinceHourIso: string;
+  hourLimit: number;
+}
+
+const COLUMNS = "id,app,app_version,app_build,platform,user_ref,message,client_ts,client_msg_id,locale,last_error,contact_email,context,body_hash,status,received_at,last_activity_at";
+
+/** Inserts the message, or returns the row an identical earlier submit created.
+ *
+ *  With `windows`, the insert itself refuses when the user has reached a ceiling: the count
+ *  and the insert are one statement, which SQLite runs atomically, so parallel submits cannot
+ *  each read the same count and all pass. A separate read-then-insert did exactly that. */
+export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnReceipt: string, windows?: SubmitWindows): Promise<{ row: MessageRow; created: boolean }> {
   const hash = await bodyHash(p);
   const existing = await findByIdempotency(db, p.app, p.user_ref, p.client_msg_id);
   if (existing) {
@@ -49,14 +64,20 @@ export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnRe
   }
   const id = newId();
   const now = nowIso();
+  const values = [id, p.app, p.app_version, p.app_build, p.platform, p.user_ref, p.message, p.client_ts, p.client_msg_id, p.locale, p.last_error, p.contact_email, p.context, hash, statusOnReceipt, now, now];
+  const stmt =
+    windows && p.user_ref
+      ? db
+          .prepare(
+            `INSERT INTO messages (${COLUMNS}) SELECT ${values.map((_, i) => `?${i + 1}`).join(",")}
+             WHERE (SELECT COUNT(*) FROM messages WHERE app=?2 AND user_ref=?6 AND received_at>=?18) < ?19
+               AND (SELECT COUNT(*) FROM messages WHERE app=?2 AND user_ref=?6 AND received_at>=?20) < ?21`,
+          )
+          .bind(...values, windows.sinceBurstIso, windows.burstLimit, windows.sinceHourIso, windows.hourLimit)
+      : db.prepare(`INSERT INTO messages (${COLUMNS}) VALUES (${values.map(() => "?").join(",")})`).bind(...values);
   try {
-    await db
-      .prepare(
-        `INSERT INTO messages (id,app,app_version,app_build,platform,user_ref,message,client_ts,client_msg_id,locale,last_error,contact_email,context,body_hash,status,received_at,last_activity_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      )
-      .bind(id, p.app, p.app_version, p.app_build, p.platform, p.user_ref, p.message, p.client_ts, p.client_msg_id, p.locale, p.last_error, p.contact_email, p.context, hash, statusOnReceipt, now, now)
-      .run();
+    const { meta } = await stmt.run();
+    if (meta.changes === 0) throw await rateLimited(db, p.app, p.user_ref!, windows!);
   } catch (e) {
     // Lost a race with an identical concurrent submit: re-read and apply the same rule.
     if (String(e).includes("UNIQUE")) {
@@ -69,9 +90,12 @@ export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnRe
   return { row: (await getMessage(db, id))!, created: true };
 }
 
-export async function countUserMessagesSince(db: D1Database, app: string, user_ref: string, sinceIso: string): Promise<number> {
-  const r = await db.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=? AND received_at>=?").bind(app, user_ref, sinceIso).first<{ n: number }>();
-  return r?.n ?? 0;
+/** Which ceiling refused the insert, read after the fact so the client gets the right wait. */
+async function rateLimited(db: D1Database, app: string, user_ref: string, w: SubmitWindows): Promise<ApiError> {
+  const { burst } = await countUserSubmitWindows(db, app, user_ref, w.sinceBurstIso, w.sinceHourIso);
+  return burst >= w.burstLimit
+    ? new ApiError(429, "rate_limited", "too many requests; retry after the indicated seconds", true, {}, { "Retry-After": "60" })
+    : new ApiError(429, "rate_limited", "hourly limit reached", true, {}, { "Retry-After": "3600" });
 }
 
 /** Per-user submit counts for the burst and hourly windows, in one round trip.

@@ -122,6 +122,39 @@ describe("POST /v1/messages", () => {
     expect(res.headers.get("retry-after")).toBe("60");
     expect(await res.json()).toMatchObject({ error: "rate_limited", retryable: true });
   });
+  it("429 with Retry-After 3600 on the 11th message in an hour when the burst window is clear", async () => {
+    for (let i = 0; i < 10; i++) {
+      const at = new Date(Date.now() - (2 + i * 5) * 60_000).toISOString();
+      await env.DB.prepare(
+        "INSERT INTO messages (id,app,app_version,platform,user_ref,message,client_msg_id,body_hash,status,received_at,last_activity_at) VALUES (?,'demo','1','web',?,'m',?,?,'pending',?,?)",
+      )
+        .bind(crypto.randomUUID(), userRef, crypto.randomUUID(), `h${i}`, at, at)
+        .run();
+    }
+    const res = await post(body());
+    expect(res.status).toBe(429);
+    expect(res.headers.get("retry-after")).toBe("3600");
+    expect(await res.json()).toMatchObject({ error: "rate_limited", retryable: true, detail: "hourly limit reached" });
+  });
+  it("the per-user limit holds under parallel submits: six at once, exactly three rows", async () => {
+    // A read-then-insert lets every parallel request see the same count and all pass. The
+    // contract calls the two per-user limits exact, so the limit has to be enforced by the
+    // insert itself. Binding limiters are permissive here so only the database rule decides.
+    const allowAll = { limit: async () => ({ success: true }) };
+    const permissive = { ...env, RL_SUBMIT_USER: allowAll, RL_SUBMIT_IP: allowAll } as unknown as typeof env;
+    const send = () => {
+      const req = new Request(url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json", "cf-connecting-ip": ip },
+        body: JSON.stringify(body()),
+      });
+      return worker.fetch(req, permissive, createExecutionContext());
+    };
+    const statuses = (await Promise.all(Array.from({ length: 6 }, send))).map((r) => r.status).sort();
+    expect(statuses).toEqual([201, 201, 201, 429, 429, 429]);
+    const n = await env.DB.prepare("SELECT COUNT(*) n FROM messages WHERE user_ref=?").bind(userRef).first<{ n: number }>();
+    expect(n!.n).toBe(3);
+  });
   it("CORS preflight succeeds only for an origin some app listed", async () => {
     await updateApp(env.DB, "demo", { allowed_origins: ["https://app.example"] });
     const pre = (origin: string) =>

@@ -61,6 +61,14 @@ against. The residual risk runs the other way: if the image service ever reports
 outage as a coded error, a good upload is refused as undecodable. `platform_code` in the
 response and the service's own message in the Worker log are what make that visible.
 
+Session 4's independent review found that risk is not hypothetical: the binding throws a numeric
+code for every failure. Five codes the service's troubleshooting page names as its own condition
+(9422 usage limit, 9432 billing, 9522 processing limit, 9524 Worker intercept, 9529 timeout) now
+answer a retryable `503` carrying `platform_code`. The list only moves a code to 503; every other
+number keeps the 415 rule. The same page lists 9516 as an "internal error", yet the live service
+gave 9516 for a corrupt PNG in Session 3, so the page's "internal" group is deliberately not on the
+list: its labels do not match what the service was observed to do.
+
 **The image origin serves the re-encoded bytes, not the uploaded bytes.** `test/images.test.ts`
 asserted the served body equalled the uploaded PNG. That only ever held under the passthrough
 codec, which does not re-encode. It now compares the served body against what the bucket holds.

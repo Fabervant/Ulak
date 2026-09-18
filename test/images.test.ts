@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import worker from "../src/api/index";
 import imagesWorker from "../src/images/index";
 import { createApp, updateApp } from "../src/core/apps";
-import { sniffImageType, purgeUnclaimedImages, getImage } from "../src/core/images";
+import { sniffImageType, purgeUnclaimedImages, getImage, stripJpegMetadata } from "../src/core/images";
 import { signImageUrl } from "../src/core/signedurl";
 import { addMinutes, nowIso } from "../src/core/time";
 import { PNG as png, JPG_WITH_GPS as jpg, SVG as svg } from "./fixtures";
@@ -164,5 +164,30 @@ describe("BindingCodec strips metadata the re-encoder leaves behind", () => {
     expect(hasExif(out)).toBe(false);
     expect(new Uint8Array(out).slice(0, 2)).toEqual(new Uint8Array([0xff, 0xd8])); // still a JPEG
     expect(out.byteLength).toBeLessThan(jpg.byteLength);
+  });
+});
+
+describe("stripJpegMetadata", () => {
+  it("drops EXIF, XMP and comments but keeps JFIF and the Adobe colour-transform segment", () => {
+    const seg = (marker: number, body: number[]) => [0xff, marker, 0x00, body.length + 2, ...body];
+    const jpeg = new Uint8Array([
+      0xff, 0xd8,
+      ...seg(0xe0, [0x4a, 0x46, 0x49, 0x46, 0x00]), // APP0 JFIF
+      ...seg(0xe1, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53]), // APP1 EXIF
+      ...seg(0xee, [0x41, 0x64, 0x6f, 0x62, 0x65, 0x00, 0x64, 0x00, 0x00, 0x00, 0x00, 0x01]), // APP14 Adobe, transform=1
+      ...seg(0xfe, [0x68, 0x69]), // COM
+      0xff, 0xda, 0x00, 0x02, 0x11, 0x22, 0xff, 0xd9,
+    ]);
+    const out = new Uint8Array(stripJpegMetadata(jpeg.buffer));
+    const markers: number[] = [];
+    for (let i = 2; i < out.length - 1; ) {
+      if (out[i] !== 0xff) break;
+      markers.push(out[i + 1]!);
+      if (out[i + 1] === 0xda) break;
+      i += 2 + ((out[i + 2]! << 8) | out[i + 3]!);
+    }
+    // Without APP14 a decoder guesses the colour transform, and an Adobe CMYK or RGB JPEG
+    // comes back with inverted or shifted colours. The segment holds flags, nothing personal.
+    expect(markers).toEqual([0xe0, 0xee, 0xda]);
   });
 });

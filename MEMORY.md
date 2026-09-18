@@ -23,10 +23,12 @@ application needs.
   two as guarantees; the specification says which is which. Settled, not pending.
 - The image service reports a file it cannot decode with a different number in every
   implementation: the live service 9516, the local one 9523, the type definitions document 9412.
-  Never switch on the code. The rule is the shape of the error, and it is in `src/core/images.ts`.
+  Never switch on the code to decide a file is bad. The rule is the shape of the error, and it is
+  in `src/core/images.ts`.
 - A corrupt upload must never answer a retryable 500: a client honouring the flag resends a file
   that can never succeed. Coded error means the file, so 415 and not retryable; no code means the
-  service, so 503 and retryable.
+  service, so 503 and retryable. The one exception (Session 4): five codes the service documents
+  as its own limit, timeout or setup are a retryable 503. The list may only move codes to 503.
 - Image metadata is stripped by Ulak, not by the re-encoder. The re-encoder keeps the EXIF
   copyright tag on JPEG by default and was observed returning GPS coordinates intact.
 - The scheduled job did not run in its first window after deployment and ran on time thereafter.

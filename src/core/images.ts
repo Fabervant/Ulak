@@ -46,20 +46,36 @@ const notRaster = () => new ApiError(415, "unsupported_media_type", "not a raste
  *  definitions document 9412 - so a code list would only ever describe wherever it was written.
  *  The numeric code is carried into the response for the operator instead of being matched on.
  *
+ *  The one exception is a short list of codes the service's own documentation names as its
+ *  own condition - a usage or processing limit, a timeout, a billing or routing setup - which
+ *  say nothing about the file. Those are a retryable 503: telling the client to discard a good
+ *  file is the mirror image of the loop the 415 prevents. The list only ever moves a code to
+ *  503; an unlisted or new number keeps the 415 rule.
+ *
  *  Anything thrown without a numeric code did not come from the service refusing the file, so
  *  it stays a retryable 503. Neither branch may fall through to the generic 500, which is what
  *  the live instance answered before this existed. */
+const SERVICE_CONDITION_CODES = new Set([
+  9422, // usage limit reached
+  9432, // account billing cannot use the binding
+  9522, // image processing limit exceeded
+  9524, // a Worker intercepted the request
+  9529, // timed out while processing
+]);
+
 function asImageError(e: unknown): ApiError {
   if (e instanceof ApiError) return e;
   const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: unknown }).code : undefined;
-  if (typeof code === "number") {
-    return new ApiError(415, "unsupported_media_type", "the image could not be decoded; it may be incomplete or damaged", false, { platform_code: code });
-  }
-  return new ApiError(503, "image_service_unavailable", "the image service could not process this upload; retry shortly", true);
+  const unavailable = (extra = {}) => new ApiError(503, "image_service_unavailable", "the image service could not process this upload; retry shortly", true, extra);
+  if (typeof code !== "number") return unavailable();
+  if (SERVICE_CONDITION_CODES.has(code)) return unavailable({ platform_code: code });
+  return new ApiError(415, "unsupported_media_type", "the image could not be decoded; it may be incomplete or damaged", false, { platform_code: code });
 }
 
 /** Removes every JPEG metadata segment: APP1-APP15 (EXIF, XMP, ICC, IPTC/Photoshop) and
  *  COM comments. APP0/JFIF is kept because decoders expect it and it carries only density.
+ *  APP14/Adobe is kept because it carries only the colour-transform flag, and without it a
+ *  decoder guesses the colour space of an Adobe RGB or CMYK file and gets it wrong.
  *  Ulak strips metadata itself rather than trusting a re-encoder's defaults: Cloudflare's
  *  transform keeps the EXIF copyright tag on JPEG by default, and defaults can change. */
 export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
@@ -71,7 +87,7 @@ export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
     const marker = b[i + 1]!;
     if (marker === 0xda) break; // start of scan: image data follows, stop here
     const len = dv(b).getUint16(i + 2);
-    const drop = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe;
+    const drop = (marker >= 0xe1 && marker <= 0xef && marker !== 0xee) || marker === 0xfe;
     if (!drop) parts.push(b.subarray(i, i + 2 + len));
     i += 2 + len;
   }

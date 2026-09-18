@@ -108,6 +108,23 @@ describe("seam: image codec", () => {
     await expect(new BindingCodec(throwing({})).info(buf(png))).rejects.toMatchObject({ status: 503, code: "image_service_unavailable", retryable: true });
   });
 
+  it("a code the service documents as its own limit or timeout is a retryable 503, never a 415", async () => {
+    // The binding throws a numeric code for every failure, not only for a bad file. A timeout or
+    // a processing limit on a perfectly good PNG must not tell the client to discard the file.
+    // These codes are listed because they name the service's condition in the service's own
+    // documentation; every other number keeps the 415 rule above.
+    const throwing = (code: number) =>
+      ({ info: async () => { throw Object.assign(new Error("service said no"), { code }); } }) as unknown as ImagesBinding;
+    for (const code of [9422, 9432, 9522, 9524, 9529]) {
+      await expect(new BindingCodec(throwing(code)).info(buf(png))).rejects.toMatchObject({
+        status: 503,
+        code: "image_service_unavailable",
+        retryable: true,
+        extra: { platform_code: code },
+      });
+    }
+  });
+
   it("a file the codec cannot decode is a 415 the client must not retry, not an internal 500", async () => {
     // It sniffs as a PNG, so it passes the byte check and reaches the codec. The live instance
     // answered this with {error:"internal", retryable:true} - a generic 500 that told the

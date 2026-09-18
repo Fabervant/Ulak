@@ -186,8 +186,9 @@ Mandatory handling, all tested:
    is rejected with `415`. A file whose bytes sniff as one of the three but that the codec cannot
    decode is also `415`, never a retryable `internal`: the codec's own error is mapped, so a
    client honouring `retryable` never loops on a file that can never succeed. When the image
-   service fails for a reason other than the file, the answer is `503 image_service_unavailable`,
-   retryable, which is a different thing and is answered as one.
+   service fails for a reason other than the file - no error code, or one of the codes the
+   service documents as its own limit, timeout or setup - the answer is `503
+   image_service_unavailable`, retryable, which is a different thing and is answered as one.
 2. Caps checked before decoding: 5 MB per file, 4096 pixels per side, 3 images per message.
 3. Every upload is decoded and re-encoded server-side. The client's bytes are never stored or
    served. Re-encoding strips all metadata, verified by a test that uploads a JPEG with GPS EXIF and
