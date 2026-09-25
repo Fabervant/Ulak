@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import type { Env } from "../core/env";
-import { readSession, SESSION_COOKIE } from "../core/auth/session";
+import { readSession, createSession, sessionCookie, SESSION_COOKIE, SESSION_RENEW_AFTER_SEC } from "../core/auth/session";
 import { findAdmin } from "../core/auth/admins";
 
 export type AdminVars = { admin: { sub: string; csrf: string } };
@@ -16,8 +16,15 @@ export function requireAdmin(): MiddlewareHandler<{ Bindings: Env; Variables: Ad
     if (!c.env.SESSION_SECRET) return fail("SESSION_SECRET not configured", 403);
     const s = await readSession(c.env.SESSION_SECRET, getCookie(c, SESSION_COOKIE));
     if (!s) return fail("no valid session", 401);
-    if (!(await findAdmin(c.env.DB, s.sub))) return fail("sub not pinned as admin", 403);
-    c.set("admin", s);
+    const admin = await findAdmin(c.env.DB, s.sub);
+    if (!admin) return fail("sub not pinned as admin", 403);
+    if (admin.sessions_invalid_before !== null && s.iat <= admin.sessions_invalid_before) return fail("session revoked", 401);
+    // Re-issued while in use, so an active admin never meets the 30-day end. Set before the
+    // handler runs: a sign-out's own set-cookie replaces this one rather than being undone by it.
+    if (Math.floor(Date.now() / 1000) - s.iat > SESSION_RENEW_AFTER_SEC) {
+      c.header("set-cookie", sessionCookie(await createSession(c.env.SESSION_SECRET, s.sub, { csrf: s.csrf })));
+    }
+    c.set("admin", { sub: s.sub, csrf: s.csrf });
     await next();
   };
 }

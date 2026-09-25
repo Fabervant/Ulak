@@ -160,7 +160,11 @@ markup. Images are served from the image origin through short-lived signed URLs.
 Authentication is Google OpenID Connect. The admin identity is the permanent `sub` claim, pinned
 the first time an allowed email signs in and checked on every request afterward; the email is
 never consulted again. `ADMIN_BOOTSTRAP_EMAILS` lists the emails allowed to pin themselves.
-An authorisation failure is a logged `403`, not a blank page. Sessions are signed, `HttpOnly`,
+An authorisation failure is a logged `403`, not a blank page. A session ends 30 days after it
+was issued and is re-issued, keeping its CSRF token, on the first request after it turns an hour
+old, so an admin in use is never signed out. *Sign out everywhere* sets the admin's
+`sessions_invalid_before`, which ends every session issued at or before that second on every
+device; removing the admin row or rotating `SESSION_SECRET` also ends them. Sessions are signed, `HttpOnly`,
 `Secure`, `SameSite=Lax` cookies. Forms carry a CSRF token. The surface sends a strict CSP.
 
 The admin surface is English only. Its screens: message list, message detail (reply, set status,

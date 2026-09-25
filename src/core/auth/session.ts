@@ -12,15 +12,29 @@ async function mac(secret: string, data: string): Promise<string> {
 }
 
 export const SESSION_COOKIE = "ulak_admin";
-export const SESSION_TTL_SEC = 43200;
+/** A session ends 30 days after it was last issued; the panel re-issues it while in use. */
+export const SESSION_TTL_SEC = 30 * 24 * 3600;
+/** A session older than this is re-issued on the admin's next request. */
+export const SESSION_RENEW_AFTER_SEC = 3600;
 
-export async function createSession(secret: string, sub: string, ttlSec = SESSION_TTL_SEC): Promise<string> {
-  const csrf = b64u(crypto.getRandomValues(new Uint8Array(24))).slice(0, 32);
-  const payload = b64u(enc.encode(JSON.stringify({ sub, csrf, exp: Math.floor(Date.now() / 1000) + ttlSec })));
+export interface Session {
+  sub: string;
+  csrf: string;
+  /** Issue time, Unix seconds: the key for renewal and for `sessions_invalid_before`. */
+  iat: number;
+}
+
+const nowSec = () => Math.floor(Date.now() / 1000);
+
+/** A renewal passes the old session's csrf so forms already on screen stay valid. */
+export async function createSession(secret: string, sub: string, opts: { ttlSec?: number; csrf?: string; iat?: number } = {}): Promise<string> {
+  const csrf = opts.csrf ?? b64u(crypto.getRandomValues(new Uint8Array(24))).slice(0, 32);
+  const iat = opts.iat ?? nowSec();
+  const payload = b64u(enc.encode(JSON.stringify({ sub, csrf, iat, exp: iat + (opts.ttlSec ?? SESSION_TTL_SEC) })));
   return `${payload}.${await mac(secret, payload)}`;
 }
 
-export async function readSession(secret: string, cookie: string | undefined): Promise<{ sub: string; csrf: string } | null> {
+export async function readSession(secret: string, cookie: string | undefined): Promise<Session | null> {
   if (!cookie) return null;
   const [payload, sig] = cookie.split(".");
   if (!payload || !sig) return null;
@@ -30,9 +44,9 @@ export async function readSession(secret: string, cookie: string | undefined): P
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
   if (diff !== 0) return null;
   try {
-    const p = JSON.parse(new TextDecoder().decode(unb64u(payload))) as { sub: string; csrf: string; exp: number };
-    if (p.exp < Math.floor(Date.now() / 1000)) return null;
-    return { sub: p.sub, csrf: p.csrf };
+    const p = JSON.parse(new TextDecoder().decode(unb64u(payload))) as { sub: string; csrf: string; iat?: number; exp: number };
+    if (typeof p.iat !== "number" || p.exp < nowSec()) return null;
+    return { sub: p.sub, csrf: p.csrf, iat: p.iat };
   } catch {
     return null;
   }

@@ -203,3 +203,47 @@ describe("sign-out leaves the browser a stranger", () => {
     }
   });
 });
+
+// The session follows the estate's own-auth shape: it ends 30 days after it was issued, is
+// re-issued while the admin is active, and "Sign out everywhere" ends every copy of it at once.
+describe("a session lives while used and can be ended everywhere", () => {
+  const sessionSet = (res: Response) => res.headers.getSetCookie().find((c) => c.startsWith("ulak_admin=") && !c.startsWith("ulak_admin=;"));
+  const hoursAgo = (h: number) => Math.floor(Date.now() / 1000) - h * 3600;
+
+  it("a fresh session is left alone; an hour-old one comes back re-issued with the same csrf", async () => {
+    expect(sessionSet(await req("/"))).toBeUndefined();
+    cookie = await createSession("s3", "sub-1", { csrf, iat: hoursAgo(2) });
+    const res = await req("/");
+    expect(res.status).toBe(200);
+    const renewed = sessionSet(res)!;
+    expect(renewed).toContain("Max-Age=2592000");
+    const s = (await readSession("s3", renewed.split(";")[0]!.slice("ulak_admin=".length)))!;
+    expect(s.csrf).toBe(csrf);
+    expect(s.iat).toBeGreaterThan(hoursAgo(0.1));
+  });
+
+  it("a session past its 30 days is refused, however recently it was used", async () => {
+    cookie = await createSession("s3", "sub-1", { iat: hoursAgo(30 * 24 + 1) });
+    expect((await req("/")).status).toBe(302);
+  });
+
+  it("sign-out still clears the cookie when the session was due for renewal", async () => {
+    cookie = await createSession("s3", "sub-1", { csrf, iat: hoursAgo(2) });
+    const res = await form("/auth/logout", {});
+    expect(sessionSet(res)).toBeUndefined();
+    expect(res.headers.getSetCookie()).toHaveLength(2);
+  });
+
+  it("sign out everywhere ends this session and every other device's, and a new sign-in works", async () => {
+    const otherDevice = await createSession("s3", "sub-1", { iat: hoursAgo(5) });
+    const res = await form("/auth/logout-all", {});
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/auth/login");
+    expect(sessionSet(res)).toBeUndefined();
+    expect((await req("/")).status).toBe(302);
+    cookie = otherDevice;
+    expect((await req("/")).status).toBe(302);
+    cookie = await createSession("s3", "sub-1", { iat: Math.floor(Date.now() / 1000) + 1 });
+    expect((await req("/")).status).toBe(200);
+  });
+});

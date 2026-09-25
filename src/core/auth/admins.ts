@@ -6,6 +6,12 @@ export interface AdminRow {
   sub: string;
   email_at_pin: string;
   pinned_at: string;
+  sessions_invalid_before: number | null;
+}
+
+/** Ends every session of this admin issued at or before `atSec`, on every device. */
+export async function revokeSessions(db: D1Database, sub: string, atSec: number): Promise<void> {
+  await db.prepare("UPDATE admins SET sessions_invalid_before=? WHERE sub=?").bind(atSec, sub).run();
 }
 
 export async function findAdmin(db: D1Database, sub: string): Promise<AdminRow | null> {
@@ -29,7 +35,7 @@ export async function bootstrapAdmin(db: D1Database, env: Env, sub: string, emai
   if (!emailVerified || !allowed.includes(email.toLowerCase())) throw notAdmin("this account is not an admin of this deployment");
   const taken = await db.prepare("SELECT sub FROM admins WHERE lower(email_at_pin)=?").bind(email.toLowerCase()).first();
   if (taken) throw notAdmin("this email already pinned a different account; remove the admin row to re-pin");
-  const row: AdminRow = { sub, email_at_pin: email, pinned_at: nowIso() };
+  const row: AdminRow = { sub, email_at_pin: email, pinned_at: nowIso(), sessions_invalid_before: null };
   await db.prepare("INSERT INTO admins (sub,email_at_pin,pinned_at) VALUES (?,?,?)").bind(sub, email, row.pinned_at).run();
   return row;
 }

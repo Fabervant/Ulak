@@ -11,7 +11,7 @@ import { appsView } from "./views/apps";
 import { tokensView } from "./views/tokens";
 import { authUrl, exchangeCode, verifyIdToken } from "../core/auth/google";
 import { createSession, sessionCookie, clearSessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie } from "../core/auth/session";
-import { bootstrapAdmin } from "../core/auth/admins";
+import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
 import { listApps, createApp, updateApp, rotateKey } from "../core/apps";
@@ -91,6 +91,15 @@ app.use("/*", requireAdmin());
 // autofill, so nothing else of the admin's remains on the device.
 app.post("/auth/logout", async (c) => {
   await readForm(c);
+  c.header("set-cookie", clearSessionCookie());
+  c.header("set-cookie", clearOauthCookie(), { append: true });
+  return c.redirect("/auth/login", 303);
+});
+
+// For a lost or shared device: every session this admin holds anywhere stops at once, this one too.
+app.post("/auth/logout-all", async (c) => {
+  await readForm(c);
+  await revokeSessions(c.env.DB, c.get("admin").sub, Math.floor(Date.now() / 1000));
   c.header("set-cookie", clearSessionCookie());
   c.header("set-cookie", clearOauthCookie(), { append: true });
   return c.redirect("/auth/login", 303);

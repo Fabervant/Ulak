@@ -29,6 +29,9 @@ export function layout(title: string, body: HtmlEscapedString | Promise<HtmlEsca
           <form class="inline" method="post" action="/auth/logout" style="margin-left:auto">
             <input type="hidden" name="csrf" value="${csrf}" /><button>Sign out</button>
           </form>
+          <form class="inline" method="post" action="/auth/logout-all">
+            <input type="hidden" name="csrf" value="${csrf}" /><button>Sign out everywhere</button>
+          </form>
         </header>
         <main>${body}</main>
       </body>
