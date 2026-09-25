@@ -1,5 +1,50 @@
 # Completed tasks
 
+## Session 5 — 2026-09-25
+
+Refactor round, the mailbox (seven letters), a new client-requested endpoint, the admin sign-in
+brought to the estate's auth shape, and the Google Cloud move.
+
+- **Refactor mandate, `test/seams.test.ts` review 1 of 3.** A fresh reviewer listed 14 defects;
+  all fixed and resolved with the mandate script, which reads CLOSED (footprint 525 to 490).
+  `test/helpers.ts` holds the helpers four files had copied; two overlapping seam tests merged into
+  `test/images.test.ts`; the origin's `content-type` is now asserted (it was asserted nowhere). The
+  admin API and HTML page mint image links through one `imageLinks` in `src/admin/api.ts` (placed
+  there because the gate blocks files the review did not name), and a new seam test follows an
+  HTML-page link to the origin. Both new checks were mutated and went red.
+- **Live no-store read-back (carry-over from S4).** Through the admin API with the operator's
+  admin token: an admin-minted image link answered 200 with `Cache-Control: private, no-store`,
+  `Content-Disposition: attachment`, `nosniff`, `default-src 'none'`; the unsigned path 403.
+- **Owner notices, `POST /v1/notify` (owner chose the route over a support thread or a second
+  bot).** An app's server sends the operator a plain-text note on the notification channel.
+  Agent design: off per app (`apps.notify_enabled`, admin checkbox), any `Origin` header refused
+  because app keys in browsers are public, 1-500 characters, text never stored, 10 per app per 24
+  hours counted by one atomic insert into `notices` (the Session 4 lesson: a separate count races),
+  a failed Telegram delivery releases its reservation, the hourly job purges counts older than a
+  day. Spec section 14. Migration 0002. Eight tests drive the real TelegramNotifier through a
+  mocked transport; the mock only took effect after re-importing the API Worker, which the test
+  config preloads as its main module (the first attempt reached Telegram with a fake token and
+  got a harmless 404). Deployed on the owner's word; live read-back: 403 `notify_disabled`,
+  403 `server_only`, 401 bad key, zero notice rows. The client was told the contract by live
+  message; its code was not touched.
+- **Admin sessions follow the own-auth rule (owner chose to conform).** Session payload carries
+  `iat`; lifetime 30 days; re-issued with the same CSRF token once an hour old, set before the
+  handler so a sign-out's own cookie replaces it; "Sign out everywhere" sets
+  `admins.sessions_invalid_before` (migration 0003) and ends every session issued at or before that
+  second (`<=`: a session minted in the same second must not survive). Google ID tokens stay
+  verified locally against Google's published keys - already direct verification, and no call
+  per sign-in. Old-format sessions are refused, so the operator signs in once. Deployed; the first
+  remote migration run applied nothing unnoticed and the admin Worker briefly ran before the
+  column existed; caught by the read-back and applied.
+- **Mailbox.** A hosted classifier model: no fit (binding decision: no AI provider inside Ulak). Google Cloud: the
+  project holds only the admin sign-in OAuth client (its number matches the live
+  `client_id`); moved into the company organization by the tested procedure with the owner's
+  approval after being told it is one-way, temporary grants removed, billing unlinked (owner),
+  Google's sign-in page accepts the client. Ideas for a planned survey service sent. Auth/mail rulings: auth handled
+  above; Ulak sends no mail. The client's reminder question answered. A second app asked when it
+  can adopt the store: told it is live, what it sends, and how to shape its port.
+- 200 to 216 tests. `c03ae3f`, `d6e1bfd`.
+
 ## Session 4 — 2026-09-19
 
 Mailbox, sign-out audit, the Session 3 carry-overs, an independent review, and the first client.
@@ -234,3 +279,4 @@ Task record, newest first:
 - An idempotent replay is answered before the rate limiters run, so a client that missed a `201` and retries gets `200`, never `429`.
 - SQL cutoffs use `strftime` in ISO format because `datetime()` output does not sort against the stored ISO strings on the same day.
 - Image fixtures are embedded in `test/fixtures.ts` because the Vite version in use has no `?base64` import.
+
