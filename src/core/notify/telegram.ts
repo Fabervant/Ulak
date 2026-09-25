@@ -11,7 +11,7 @@ export class TelegramNotifier implements Notifier {
     const res = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ chat_id: this.chatId, text: `${n.text}\n${n.adminLink}`, disable_web_page_preview: true }),
+      body: JSON.stringify({ chat_id: this.chatId, text: n.adminLink ? `${n.text}\n${n.adminLink}` : n.text, disable_web_page_preview: true }),
     });
     if (!res.ok) throw new Error(`telegram sendMessage failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
   }

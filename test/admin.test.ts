@@ -99,9 +99,9 @@ describe("admin surface", () => {
     expect(created.status).toBe(200);
     expect(await created.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
     expect((await form("/apps", { id: "Bad Id", retention_days: "30" })).status).toBe(400);
-    expect((await form("/apps/newapp", { retention_days: "45", images_enabled: "on", allowed_origins: "https://a.example" })).status).toBe(303);
-    const row = await env.DB.prepare("SELECT retention_days, images_enabled, allowed_origins FROM apps WHERE id='newapp'").first<{ retention_days: number; images_enabled: number; allowed_origins: string }>();
-    expect(row).toEqual({ retention_days: 45, images_enabled: 1, allowed_origins: '["https://a.example"]' });
+    expect((await form("/apps/newapp", { retention_days: "45", images_enabled: "on", notify_enabled: "on", allowed_origins: "https://a.example" })).status).toBe(303);
+    const row = await env.DB.prepare("SELECT retention_days, images_enabled, notify_enabled, allowed_origins FROM apps WHERE id='newapp'").first<{ retention_days: number; images_enabled: number; notify_enabled: number; allowed_origins: string }>();
+    expect(row).toEqual({ retention_days: 45, images_enabled: 1, notify_enabled: 1, allowed_origins: '["https://a.example"]' });
     const rotated = await form("/apps/newapp/rotate", {});
     expect(await rotated.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
     const tok = await form("/tokens", { name: "laptop" });

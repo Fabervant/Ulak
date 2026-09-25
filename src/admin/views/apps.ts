@@ -7,7 +7,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
           <pre><code>${newKey.key}</code></pre>`
       : ""}
     <table>
-      <tr><th>app</th><th>retention days, images, allowed origins</th><th></th></tr>
+      <tr><th>app</th><th>retention days, images, owner notices, allowed origins</th><th></th></tr>
       ${apps.map(
         (a) => html`<tr>
           <td>${a.id}</td>
@@ -16,6 +16,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
               <input type="hidden" name="csrf" value="${csrf}" />
               <input name="retention_days" type="number" min="1" max="3650" value="${a.retention_days}" class="narrow" />
               <label><input type="checkbox" name="images_enabled" ${a.images_enabled ? "checked" : ""} class="narrow" /> images</label>
+              <label><input type="checkbox" name="notify_enabled" ${a.notify_enabled ? "checked" : ""} class="narrow" /> owner notices</label>
               <input name="allowed_origins" value="${a.allowed_origins.join(",")}" placeholder="https://a.example,https://www.a.example" />
               <button>Save</button>
             </form>

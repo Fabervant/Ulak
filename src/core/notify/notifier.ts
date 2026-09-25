@@ -4,7 +4,8 @@ import { TelegramNotifier } from "./telegram";
 
 export interface Notification {
   text: string;
-  adminLink: string;
+  /** Absent on an owner notice, which has no thread in the admin panel. */
+  adminLink?: string;
 }
 
 export interface Notifier {

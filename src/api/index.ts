@@ -13,6 +13,8 @@ import { MemoryRateLimiter, limiterFor, enforce, SUBMIT_BURST_LIMIT, SUBMIT_HOUR
 import { clientIp } from "../core/clientip";
 import { addMinutes, nowIso } from "../core/time";
 import { notifyMessage } from "../core/notify/dispatch";
+import { notifierFromEnv } from "../core/notify/notifier";
+import { validateNotice, reserveNotice, releaseNotice } from "../core/notices";
 import { cors } from "./cors";
 import { runScheduled } from "../core/retention";
 import { uploadImage, codecFromEnv, claimImages, countClaimable, MAX_IMAGE_BYTES } from "../core/images";
@@ -109,6 +111,29 @@ app.post("/v1/messages", async (c) => {
   if (created && p.attachments.length) await claimImages(c.env.DB, tenant.id, p.user_ref, row.id, p.attachments);
   if (created) c.executionCtx.waitUntil(notifyMessage(c.env, row));
   return c.json({ id: row.id, received_at: row.received_at }, created ? 201 : 200);
+});
+
+// An owner notice: a short note from an app's server to the operator, on the same channel as new
+// messages. Nothing is stored but the count, and a failed delivery gives its place back.
+app.post("/v1/notify", async (c) => {
+  // An app key in a browser is public; only the app's own server may reach the operator this way.
+  if (c.req.header("origin")) throw new ApiError(403, "server_only", "notices are sent from a server, never from a browser", false);
+  const raw = await readJsonCapped(c.req.raw); // 413 / 415 / 400
+  await requireAppKey()(c, async () => {}); // 401
+  const tenant = c.get("app");
+  if (!tenant.notify_enabled) throw new ApiError(403, "notify_disabled", "owner notices are not enabled for this app", false);
+  const text = validateNotice(raw); // 400
+  if (c.env.NOTIFIER !== "telegram") throw new ApiError(503, "notifier_unconfigured", "this instance has no notification channel", false);
+  const id = await reserveNotice(c.env.DB, tenant.id, nowIso());
+  if (!id) throw new ApiError(429, "rate_limited", "daily notice limit reached; retry after the indicated seconds", true, {}, { "Retry-After": "3600" });
+  try {
+    await notifierFromEnv(c.env).send({ text: `[${tenant.id}] ${text}` });
+  } catch (e) {
+    await releaseNotice(c.env.DB, id);
+    console.error("notice", e);
+    throw new ApiError(503, "notifier_unavailable", "the notification channel did not accept the notice", true);
+  }
+  return c.json({ id }, 201);
 });
 
 const imageTooLarge = () => new ApiError(413, "payload_too_large", `image exceeds ${MAX_IMAGE_BYTES} bytes`, false, { max_bytes: MAX_IMAGE_BYTES });

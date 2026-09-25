@@ -2,6 +2,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:
 import { describe, it, expect, beforeEach } from "vitest";
 import worker from "../src/api/index";
 import { createApp, updateApp } from "../src/core/apps";
+import { hex, randomIp } from "./helpers";
 
 let key: string;
 let userRef: string;
@@ -31,8 +32,8 @@ async function post(json: unknown, init: RequestInit = {}) {
 beforeEach(async () => {
   key = (await createApp(env.DB, "demo")).key;
   // The in-memory limiter is per isolate, so every test acts as a distinct client.
-  userRef = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  ip = `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+  userRef = hex();
+  ip = randomIp();
 });
 
 describe("POST /v1/messages", () => {

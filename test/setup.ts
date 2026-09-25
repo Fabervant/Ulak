@@ -9,7 +9,7 @@ await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
 // empty tables and an empty bucket.
 beforeEach(async () => {
   await env.DB.batch(
-    ["admin_tokens", "admins", "images", "replies", "messages", "apps"].map((t) => env.DB.prepare(`DELETE FROM ${t}`)),
+    ["admin_tokens", "admins", "notices", "images", "replies", "messages", "apps"].map((t) => env.DB.prepare(`DELETE FROM ${t}`)),
   );
   const objects = await env.IMAGES.list();
   await Promise.all(objects.objects.map((o) => env.IMAGES.delete(o.key)));

@@ -18,6 +18,15 @@ api.use("*", requireAdminToken());
 
 const notFound = () => new ApiError(404, "not_found", "no such message", false);
 
+/** The admin's links to a message's images, valid ten minutes, for both the API and the HTML
+ *  page; null when no secret is set, because the image origin refuses an unsigned link. */
+export async function imageLinks(env: Env, ids: string[]): Promise<string[] | null> {
+  const secret = env.IMAGE_URL_SECRET;
+  if (!secret) return null;
+  const exp = Math.floor(Date.now() / 1000) + 600;
+  return Promise.all(ids.map((id) => signImageUrl(secret, env.IMAGES_URL, id, exp)));
+}
+
 api.get("/messages", async (c) => {
   const since = c.req.query("since");
   if (since && !isIso(since)) throw new ApiError(400, "invalid_request", "since must be ISO 8601", false, { field: "since" });
@@ -59,7 +68,6 @@ api.get("/messages/:id", async (c) => {
   const m = await getMessage(c.env.DB, c.req.param("id"));
   if (!m) throw notFound();
   const [replies, images] = await Promise.all([listReplies(c.env.DB, m.id), listImagesFor(c.env.DB, m.id)]);
-  const exp = Math.floor(Date.now() / 1000) + 600;
   let context: unknown = null;
   try {
     context = m.context ? JSON.parse(m.context) : null;
@@ -67,14 +75,12 @@ api.get("/messages/:id", async (c) => {
     context = m.context;
   }
   const { body_hash: _h, ...rest } = m;
-  const secret = c.env.IMAGE_URL_SECRET;
+  const urls = await imageLinks(c.env, images.map((i) => i.id));
   return c.json({
     ...rest,
     context,
     replies,
-    images: await Promise.all(
-      images.map(async (i) => ({ id: i.id, width: i.width, height: i.height, bytes: i.bytes, url: secret ? await signImageUrl(secret, c.env.IMAGES_URL, i.id, exp) : null })),
-    ),
+    images: images.map((i, n) => ({ id: i.id, width: i.width, height: i.height, bytes: i.bytes, url: urls?.[n] ?? null })),
   });
 });
 

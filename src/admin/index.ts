@@ -16,9 +16,8 @@ import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } fro
 import { addReply, listReplies } from "../core/replies";
 import { listApps, createApp, updateApp, rotateKey } from "../core/apps";
 import { listImagesFor, deleteImageObjects } from "../core/images";
-import { signImageUrl } from "../core/signedurl";
 import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/auth/admintoken";
-import { api } from "./api";
+import { api, imageLinks } from "./api";
 import { runChecks } from "../core/checks";
 
 type Ctx = { Bindings: Env; Variables: AdminVars };
@@ -110,9 +109,7 @@ app.get("/m/:id", async (c) => {
   const m = await getMessage(c.env.DB, c.req.param("id"));
   if (!m) return c.text("not found", 404);
   const [replies, images] = await Promise.all([listReplies(c.env.DB, m.id), listImagesFor(c.env.DB, m.id)]);
-  const exp = Math.floor(Date.now() / 1000) + 600;
-  const secret = c.env.IMAGE_URL_SECRET;
-  const urls = secret ? await Promise.all(images.map((i) => signImageUrl(secret, c.env.IMAGES_URL, i.id, exp))) : [];
+  const urls = (await imageLinks(c.env, images.map((i) => i.id))) ?? [];
   const csrf = c.get("admin").csrf;
   return c.html(layout(`Message ${m.id.slice(0, 8)}`, detailView(m, replies, urls, statusList(c.env), csrf), csrf));
 });
@@ -160,6 +157,7 @@ app.post("/apps/:id", async (c) => {
   await updateApp(c.env.DB, c.req.param("id"), {
     retention_days: Number(f.retention_days),
     images_enabled: f.images_enabled === "on",
+    notify_enabled: f.notify_enabled === "on",
     allowed_origins: (f.allowed_origins ?? "")
       .split(",")
       .map((s) => s.trim())

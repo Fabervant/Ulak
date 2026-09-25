@@ -6,10 +6,10 @@ import { insertMessage, setStatus, getMessage } from "../src/core/messages";
 import { addReply } from "../src/core/replies";
 import { validateSubmit } from "../src/core/validate";
 import { statusLabel } from "../src/core/locales";
+import { hex } from "./helpers";
 
 let key: string;
 let U: string;
-const hex = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const mk = (over: Record<string, unknown> = {}) =>
   validateSubmit({ app: "demo", app_version: "1", platform: "web", user_ref: U, message: "hi", client_msg_id: crypto.randomUUID(), locale: "tr", ...over });
 const get = (qs: string, headers: Record<string, string> = {}) =>

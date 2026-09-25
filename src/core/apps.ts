@@ -6,44 +6,46 @@ export interface AppRow {
   key_hash: string;
   retention_days: number;
   images_enabled: boolean;
+  notify_enabled: boolean;
   allowed_origins: string[];
   created_at: string;
 }
 
-type AppPatch = Partial<Pick<AppRow, "retention_days" | "images_enabled" | "allowed_origins">>;
+type AppPatch = Partial<Pick<AppRow, "retention_days" | "images_enabled" | "notify_enabled" | "allowed_origins">>;
 
 interface Raw {
   id: string;
   key_hash: string;
   retention_days: number;
   images_enabled: number;
+  notify_enabled: number;
   allowed_origins: string;
   created_at: string;
 }
 
-const toRow = (r: Raw): AppRow => ({ ...r, images_enabled: r.images_enabled === 1, allowed_origins: JSON.parse(r.allowed_origins) as string[] });
+const toRow = (r: Raw): AppRow => ({ ...r, images_enabled: r.images_enabled === 1, notify_enabled: r.notify_enabled === 1, allowed_origins: JSON.parse(r.allowed_origins) as string[] });
 
 export const APP_ID = /^[a-z0-9_-]{2,32}$/;
 const KEY = /^ulak_[a-z0-9_-]{2,32}_[0-9a-f]{48}$/;
 const ORIGIN = /^https?:\/\/[^/\s]+$/;
 
-function validatePatch(cur: AppRow, patch: AppPatch): { days: number; images: boolean; origins: string[] } {
+function validatePatch(cur: AppRow, patch: AppPatch): { days: number; images: boolean; notify: boolean; origins: string[] } {
   const days = patch.retention_days ?? cur.retention_days;
   if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error("retention_days must be 1 to 3650");
   const origins = patch.allowed_origins ?? cur.allowed_origins;
   for (const o of origins) if (!ORIGIN.test(o)) throw new Error(`bad origin ${o}`);
-  return { days, images: patch.images_enabled ?? cur.images_enabled, origins };
+  return { days, images: patch.images_enabled ?? cur.images_enabled, notify: patch.notify_enabled ?? cur.notify_enabled, origins };
 }
 
 export async function createApp(db: D1Database, id: string, opts: AppPatch = {}): Promise<{ app: AppRow; key: string }> {
   if (!APP_ID.test(id)) throw new Error("app id must match [a-z0-9_-]{2,32}");
   if (await getApp(db, id)) throw new Error(`app ${id} already exists`);
-  const defaults: AppRow = { id, key_hash: "", retention_days: 90, images_enabled: false, allowed_origins: [], created_at: "" };
-  const { days, images, origins } = validatePatch(defaults, opts);
+  const defaults: AppRow = { id, key_hash: "", retention_days: 90, images_enabled: false, notify_enabled: false, allowed_origins: [], created_at: "" };
+  const { days, images, notify, origins } = validatePatch(defaults, opts);
   const key = randomToken(`ulak_${id}`);
   await db
-    .prepare("INSERT INTO apps (id,key_hash,retention_days,images_enabled,allowed_origins,created_at) VALUES (?,?,?,?,?,?)")
-    .bind(id, await sha256Hex(key), days, images ? 1 : 0, JSON.stringify(origins), nowIso())
+    .prepare("INSERT INTO apps (id,key_hash,retention_days,images_enabled,notify_enabled,allowed_origins,created_at) VALUES (?,?,?,?,?,?,?)")
+    .bind(id, await sha256Hex(key), days, images ? 1 : 0, notify ? 1 : 0, JSON.stringify(origins), nowIso())
     .run();
   return { app: (await getApp(db, id))!, key };
 }
@@ -66,8 +68,11 @@ export async function listApps(db: D1Database): Promise<AppRow[]> {
 export async function updateApp(db: D1Database, id: string, patch: AppPatch): Promise<void> {
   const cur = await getApp(db, id);
   if (!cur) throw new Error(`app ${id} not found`);
-  const { days, images, origins } = validatePatch(cur, patch);
-  await db.prepare("UPDATE apps SET retention_days=?, images_enabled=?, allowed_origins=? WHERE id=?").bind(days, images ? 1 : 0, JSON.stringify(origins), id).run();
+  const { days, images, notify, origins } = validatePatch(cur, patch);
+  await db
+    .prepare("UPDATE apps SET retention_days=?, images_enabled=?, notify_enabled=?, allowed_origins=? WHERE id=?")
+    .bind(days, images ? 1 : 0, notify ? 1 : 0, JSON.stringify(origins), id)
+    .run();
 }
 
 export async function rotateKey(db: D1Database, id: string): Promise<string> {

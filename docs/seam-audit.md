@@ -7,7 +7,8 @@ now drives the production side of it, and — where the production side still ca
 from a test — says so plainly and names what covers it instead.
 
 `test/seams.test.ts` is the executable half of this document. Anything asserted below is
-asserted there.
+asserted there, except the JPEG re-encode through the real binding, which runs on the upload
+path in `test/images.test.ts`.
 
 ## The seams
 

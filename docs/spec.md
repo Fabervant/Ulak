@@ -24,7 +24,8 @@ deploys it to their own free Cloudflare account. Everything deployment-specific 
   admin grouping all hang off it.
 - Apps are rows in the `apps` table, created with the `add-app` script or from the admin surface.
   Each app has: an id (lowercase, `[a-z0-9_-]{2,32}`), a hashed API key, `retention_days`
-  (default 90), `images_enabled` (default false), `allowed_origins` (list, may be empty).
+  (default 90), `images_enabled` (default false), `notify_enabled` (default false, section 14),
+  `allowed_origins` (list, may be empty).
 - The per-app key is friction and tenancy, **not authentication**. It ships inside public clients
   and must be treated as public. Its job is to identify the tenant. A server-to-server integration
   that keeps the key on the server is the stronger form; the browser-direct POST is the weaker
@@ -220,7 +221,7 @@ Mandatory handling, all tested:
 - Default retention 90 days per app, configurable, never unbounded. The clock runs from
   `last_activity_at`: the latest of receipt, last reply and last status change.
 - An hourly scheduled job hard-deletes expired messages with their replies and images, and deletes
-  unclaimed images older than 15 minutes.
+  unclaimed images older than 15 minutes, and owner-notice counts older than a day.
 - Per-`user_ref` deletion exists from day one (section 5) and from the admin surface.
 - `CONTROLLER_NAME` names the data controller in the privacy statement the deployment publishes.
 
@@ -280,3 +281,35 @@ locale, with the app's code in view. Ulak itself calls no AI provider.
 - A stranger must be able to clone and self-host from the README alone.
 - Secret scanning runs as a pre-push hook and in CI.
 - MIT means no warranty and no support promise from the maintainers.
+
+## 14. Owner notices
+
+An app's own server may send the operator a short note on the same notification channel as new
+messages - a reminder, a scheduled nudge - without a second bot or credential.
+
+```
+POST /v1/notify
+Authorization: Bearer <app key>
+Content-Type: application/json
+{"text": "..."}
+```
+
+- Off for every app until the operator ticks *owner notices* for it on the admin surface.
+- Server to server only: a request carrying an `Origin` header is refused, because an app key in
+  a browser is public.
+- `text` is 1 to 500 characters after trimming, sent as plain text prefixed with `[app]`. It is
+  never stored; one row per notice (id, app, time) is kept for a day to count the ceiling.
+- Ceiling: 10 notices per app in any 24 hours, counted in the database and exact.
+- The notice is sent before the response, so the status says whether it reached the channel.
+  A failed delivery gives its place in the ceiling back.
+
+| Status | Code | Retryable |
+|---|---|---|
+| 201 | sent: `{"id"}` | n/a |
+| 400 | `invalid_request` (adds `field`) | no |
+| 401 | `invalid_app_key` | no |
+| 403 | `server_only`, `notify_disabled` | no |
+| 413, 415 | as in section 3 | no |
+| 429 | `rate_limited` with `Retry-After` header | yes, after `Retry-After` |
+| 503 | `notifier_unconfigured` (the instance has no channel) | no |
+| 503 | `notifier_unavailable` (the channel refused) | yes |
