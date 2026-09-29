@@ -1,35 +1,18 @@
-import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { describe, it, expect, beforeEach } from "vitest";
-import admin from "../src/admin/index";
 import { createApp } from "../src/core/apps";
 import { insertMessage } from "../src/core/messages";
-import { validateSubmit } from "../src/core/validate";
 import { createAdminToken, revokeAdminToken } from "../src/core/auth/admintoken";
 import { addMinutes, nowIso } from "../src/core/time";
+import { submission, adminRequest } from "./helpers";
 
 const E = { ...env, SESSION_SECRET: "s3", IMAGE_URL_SECRET: "i3" };
 let token: string;
 let tokenId: string;
 const mk = (over: Record<string, unknown> = {}) =>
-  validateSubmit({
-    app: "demo",
-    app_version: "1",
-    platform: "web",
-    user_ref: "f3a9c2e1d4b5a6978877665544332211",
-    message: "hola",
-    client_msg_id: crypto.randomUUID(),
-    locale: "es",
-    last_error: "E",
-    context: { a: 1 },
-    contact_email: "x@example.invalid",
-    ...over,
-  });
-async function call(path: string, init: RequestInit = {}, t = token) {
-  const ctx = createExecutionContext();
-  const res = await admin.fetch(new Request(`https://admin.example.invalid${path}`, { ...init, headers: { authorization: `Bearer ${t}`, "content-type": "application/json", ...(init.headers as Record<string, string>) } }), E, ctx);
-  await waitOnExecutionContext(ctx);
-  return res;
-}
+  submission({ message: "hola", locale: "es", last_error: "E", context: { a: 1 }, contact_email: "x@example.invalid", ...over });
+const call = (path: string, init: RequestInit = {}, t = token) =>
+  adminRequest(E, path, { ...init, headers: { authorization: `Bearer ${t}`, "content-type": "application/json", ...(init.headers as Record<string, string>) } });
 
 beforeEach(async () => {
   await createApp(env.DB, "demo");
@@ -84,12 +67,7 @@ describe("admin API", () => {
 
 describe("GET /status/:secret", () => {
   const S = { ...E, STATUS_SECRET: "a-very-long-random-status-secret" };
-  const hit = async (path: string, envOverride = S) => {
-    const ctx = createExecutionContext();
-    const res = await admin.fetch(new Request(`https://admin.example.invalid${path}`), envOverride, ctx);
-    await waitOnExecutionContext(ctx);
-    return res;
-  };
+  const hit = (path: string, envOverride = S) => adminRequest(envOverride, path);
 
   it("200 {ok:true} with the right secret when nothing is wrong", async () => {
     const res = await hit("/status/a-very-long-random-status-secret");

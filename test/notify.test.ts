@@ -5,19 +5,11 @@ import { TelegramNotifier } from "../src/core/notify/telegram";
 import { notifyMessage } from "../src/core/notify/dispatch";
 import { createApp } from "../src/core/apps";
 import { insertMessage, getMessage } from "../src/core/messages";
-import { validateSubmit } from "../src/core/validate";
+import { submission } from "./helpers";
 
 const seed = async () => {
   await createApp(env.DB, "demo");
-  const p = validateSubmit({
-    app: "demo",
-    app_version: "2.1",
-    platform: "ios",
-    user_ref: "f3a9c2e1d4b5a6978877665544332211",
-    message: "Şifremi unuttum, İstanbul'dan yazıyorum ğüşıöç",
-    client_msg_id: crypto.randomUUID(),
-    locale: "tr-TR",
-  });
+  const p = submission({ app_version: "2.1", platform: "ios", message: "Şifremi unuttum, İstanbul'dan yazıyorum ğüşıöç", locale: "tr-TR" });
   return (await insertMessage(env.DB, p, "pending")).row;
 };
 

@@ -3,14 +3,13 @@ import { describe, it, expect } from "vitest";
 import { createApp, updateApp } from "../src/core/apps";
 import { insertMessage, getMessage } from "../src/core/messages";
 import { addReply } from "../src/core/replies";
-import { validateSubmit } from "../src/core/validate";
 import { runScheduled } from "../src/core/retention";
 import { addMinutes } from "../src/core/time";
+import { submission } from "./helpers";
 
 const DAY = 24 * 60;
 const NOW = "2026-06-01T00:00:00.000Z";
-const mk = (app = "demo") =>
-  validateSubmit({ app, app_version: "1", platform: "web", user_ref: "f3a9c2e1d4b5a6978877665544332211", message: "m", client_msg_id: crypto.randomUUID() });
+const mk = (app = "demo") => submission({ app });
 const backdate = (id: string, iso: string) => env.DB.prepare("UPDATE messages SET received_at=?, last_activity_at=? WHERE id=?").bind(iso, iso, id).run();
 
 describe("runScheduled: retention", () => {

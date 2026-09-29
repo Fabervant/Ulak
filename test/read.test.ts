@@ -4,14 +4,12 @@ import worker from "../src/api/index";
 import { createApp } from "../src/core/apps";
 import { insertMessage, setStatus, getMessage } from "../src/core/messages";
 import { addReply } from "../src/core/replies";
-import { validateSubmit } from "../src/core/validate";
 import { statusLabel } from "../src/core/locales";
-import { hex } from "./helpers";
+import { hex, submission } from "./helpers";
 
 let key: string;
 let U: string;
-const mk = (over: Record<string, unknown> = {}) =>
-  validateSubmit({ app: "demo", app_version: "1", platform: "web", user_ref: U, message: "hi", client_msg_id: crypto.randomUUID(), locale: "tr", ...over });
+const mk = (over: Record<string, unknown> = {}) => submission({ user_ref: U, message: "hi", locale: "tr", ...over });
 const get = (qs: string, headers: Record<string, string> = {}) =>
   worker.fetch(new Request(`https://api.example.invalid/v1/messages?${qs}`, { headers: { authorization: `Bearer ${key}`, ...headers } }), env, createExecutionContext());
 

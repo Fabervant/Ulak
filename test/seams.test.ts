@@ -6,14 +6,13 @@
 import { env, createExecutionContext } from "cloudflare:test";
 import { describe, it, expect, beforeEach } from "vitest";
 import imagesWorker from "../src/images/index";
-import adminWorker from "../src/admin/index";
 import { BindingCodec, PassthroughCodec, codecFromEnv, getImage, deleteImageObjects } from "../src/core/images";
 import { BindingRateLimiter, MemoryRateLimiter, limiterFor } from "../src/core/ratelimit";
 import { defaultFetch } from "../src/core/http";
 import { createAdminToken } from "../src/core/auth/admintoken";
 import { createSession } from "../src/core/auth/session";
 import { PNG as png, JPG_WITH_GPS as jpg } from "./fixtures";
-import { hex, imagesApp, uploadImage, submitWithImages } from "./helpers";
+import { hex, imagesApp, uploadImage, imageOnMessage, pinAdmin, adminRequest } from "./helpers";
 
 const buf = (u: Uint8Array): ArrayBuffer => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
 /** A vector the image service can actually decode. The fixture SVG has no intrinsic size, so
@@ -120,21 +119,10 @@ describe("seam: image codec", () => {
 describe("seam: signed-URL builder across the two Workers", () => {
   const E = { ...env, SESSION_SECRET: "s3", IMAGE_URL_SECRET: "shared-image-secret" };
 
-  const seedImageOnMessage = async () => {
-    const { id } = await (await upload(png, "image/png")).json<{ id: string }>();
-    const ok = await submitWithImages(key, [id], U);
-    expect(ok.status).toBe(201);
-    return { imageId: id, messageId: (await ok.json<{ id: string }>()).id };
-  };
-
   /** The URL the admin API gives for one image of one message, under the admin's own env. */
   const adminApiImageUrl = async (adminEnv: typeof env, messageId: string, imageId: string) => {
     const token = (await createAdminToken(env.DB, hex())).token;
-    const detail = await adminWorker.fetch(
-      new Request(`https://admin.example.invalid/api/messages/${messageId}`, { headers: { authorization: `Bearer ${token}` } }),
-      adminEnv,
-      createExecutionContext(),
-    );
+    const detail = await adminRequest(adminEnv, `/api/messages/${messageId}`, { headers: { authorization: `Bearer ${token}` } });
     expect(detail.status).toBe(200);
     const body = await detail.json<{ images: Array<{ id: string; url: string | null }> }>();
     return body.images.find((i) => i.id === imageId)!.url;
@@ -152,32 +140,28 @@ describe("seam: signed-URL builder across the two Workers", () => {
   };
 
   it("a URL the admin API minted is accepted by the image origin and serves the stored bytes", async () => {
-    const { imageId, messageId } = await seedImageOnMessage();
+    const { imageId, messageId } = await imageOnMessage(key, U);
     await expectServesStored((await adminApiImageUrl(E, messageId, imageId))!, imageId);
   });
 
   it("a link on the admin's HTML message page is accepted by the image origin", async () => {
-    const { imageId, messageId } = await seedImageOnMessage();
-    await env.DB.prepare("INSERT INTO admins (sub,email_at_pin,pinned_at) VALUES ('sub-seam','a@example.invalid','2026-01-01T00:00:00.000Z')").run();
-    const page = await adminWorker.fetch(
-      new Request(`https://admin.example.invalid/m/${messageId}`, { headers: { cookie: `ulak_admin=${await createSession("s3", "sub-seam")}` } }),
-      E,
-      createExecutionContext(),
-    );
+    const { imageId, messageId } = await imageOnMessage(key, U);
+    await pinAdmin("sub-seam");
+    const page = await adminRequest(E, `/m/${messageId}`, { headers: { cookie: `ulak_admin=${await createSession("s3", "sub-seam")}` } });
     expect(page.status).toBe(200);
     const href = /href="(https:[^"]+)"/.exec(await page.text())![1]!.replaceAll("&amp;", "&");
     await expectServesStored(href, imageId);
   });
 
   it("the image origin rejects an admin-minted URL when the two Workers hold different secrets", async () => {
-    const { imageId, messageId } = await seedImageOnMessage();
+    const { imageId, messageId } = await imageOnMessage(key, U);
     const url = (await adminApiImageUrl(E, messageId, imageId))!;
     const mismatched = { ...env, IMAGE_URL_SECRET: "a-different-secret" };
     expect((await imagesWorker.fetch(new Request(url), mismatched, createExecutionContext())).status).toBe(403);
   });
 
   it("the admin API returns no URL at all when the secret is unset, rather than an unsigned one", async () => {
-    const { imageId, messageId } = await seedImageOnMessage();
+    const { imageId, messageId } = await imageOnMessage(key, U);
     expect(await adminApiImageUrl({ ...E, IMAGE_URL_SECRET: undefined }, messageId, imageId)).toBeNull();
   });
 });

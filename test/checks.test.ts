@@ -2,12 +2,12 @@ import { env } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 import { createApp } from "../src/core/apps";
 import { insertMessage } from "../src/core/messages";
-import { validateSubmit } from "../src/core/validate";
 import { runChecks } from "../src/core/checks";
 import { addMinutes, nowIso } from "../src/core/time";
 import { createAdminToken, verifyAdminToken, revokeAdminToken } from "../src/core/auth/admintoken";
+import { submission } from "./helpers";
 
-const mk = () => validateSubmit({ app: "demo", app_version: "1", platform: "web", user_ref: null, message: "m", client_msg_id: crypto.randomUUID() });
+const mk = () => submission({ user_ref: null });
 
 describe("runChecks", () => {
   it("is green on an empty store and on a freshly notified row", async () => {
