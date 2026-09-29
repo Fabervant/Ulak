@@ -20,3 +20,4 @@ routing, `jose` for OpenID Connect, Vitest with the Cloudflare Workers plugin fo
 
 ## Decisions
 - No non-image attachments, no captcha, no end-user accounts, no AI provider inside Ulak.
+- The admin panel signs in with Google only; the three-way sign-in rule covers sign-ins the public uses. (owner S6)

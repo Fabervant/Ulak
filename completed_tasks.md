@@ -1,5 +1,47 @@
 # Completed tasks
 
+## Session 6 — 2026-09-29
+
+Refactor round, independent review of the Session 5 code with fixes deployed, the mailbox, and
+the operator's first live sign-in.
+
+- **Refactor mandate, `test/admin.test.ts` review 1 of 3** (the hook's choice; the prompt expected
+  `src/core/images.ts`, which opens next). A fresh reviewer listed 11 defects; all fixed, mandate
+  CLOSED (footprint 814 to 759). `test/helpers.ts` gained `submission`, `pinAdmin`, `adminRequest`
+  and `imageOnMessage`, replacing copies in seven test files; the mixed tests were split. New tests
+  pin delete-user removing stored images, fail-closed without `SESSION_SECRET`, the full admin
+  header set, both cookies cleared by Sign out everywhere, and the same-second revocation boundary;
+  each went red when its line was removed. One file-wide Google signing key, because jose caches
+  the fetched key set by key id. `17133a9`.
+- **Independent review of the Session 5 code (`/code-review high`), 10 findings, all handled with
+  a failing test first.** Owner notices take a separate notice key (`ulak_notice_<app>_<hex>`,
+  admin "New notice key", migration 0004), because the app key ships in web pages and anyone
+  holding it could send notices (owner's ruling). Notice text is folded to one line so it cannot
+  fake a second alert; length counted after trimming; `Retry-After` is the exact wait; a channel
+  missing its secrets is `notifier_unconfigured` (via `channelFromEnv`); a failed release still
+  answers 503 `notifier_unavailable`. Sessions carry their sign-in time through renewals and
+  revocation compares that, so a renewal racing Sign out everywhere cannot outlive it (a cookie
+  without the field falls back to its issue time). API tokens are not revoked by Sign out
+  everywhere: they are per-device script credentials, and the tokens page now says so. `nowSec`
+  shared, one sign-out helper. Each fix mutated and went red. Spec sections 5 and 14. `485fc89`.
+- **Live.** Migration 0004 applied (full output read, `migrations list` clean, column and index read
+  back), both Workers deployed, pushed, CI green. Read back: a made-up notice key answers 401
+  `invalid_notice_key`, a browser origin 403 `server_only`; the admin API app list shows
+  `has_notice_key` and no hash field.
+- **Operator sign-in (first since the Google Cloud move and the session change).** Live log: 22:14
+  sign-in completed and the Messages page answered 200; after the deploy the pre-deploy session
+  was still accepted; at 23:19, past the hour, pages answered 200 without a new sign-in.
+- **Mailbox, seven letters, all archived.** Admin panel stays Google-only (owner: the three-way
+  sign-in rule covers public sign-ins). No owner address in any tracked file; Ulak sends no mail.
+  No payments, no sign-up. Memory moved into gitignored `memory/`, auto-memory pointed at it,
+  proven from a fresh session, old folder deleted (`784e125`). Test impact analysis planned with
+  Vitest's import-graph selection for local runs; releases keep the full run (`5cbcba4`).
+- **First client.** Asked by live message: notify not wired yet, notices to stay off, no contract
+  questions. Told of the notice-key change before it was built; it agreed; sent the final contract.
+- Found: an uptime monitor polls `/api/checks` without a key and is refused every ~12 minutes;
+  the right monitor uses the status path. The operator removes it in the monitor's dashboard.
+- 216 to 232 tests.
+
 ## Session 5 — 2026-09-25
 
 Refactor round, the mailbox (seven letters), a new client-requested endpoint, the admin sign-in
