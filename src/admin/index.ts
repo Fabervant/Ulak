@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { getCookie } from "hono/cookie";
 import type { Env } from "../core/env";
 import { statusList } from "../core/env";
@@ -14,11 +14,12 @@ import { createSession, sessionCookie, clearSessionCookie, OAUTH_COOKIE, oauthCo
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
-import { listApps, createApp, updateApp, rotateKey } from "../core/apps";
+import { listApps, createApp, updateApp, rotateKey, rotateNoticeKey } from "../core/apps";
 import { listImagesFor, deleteImageObjects } from "../core/images";
 import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/auth/admintoken";
 import { api, imageLinks } from "./api";
 import { runChecks } from "../core/checks";
+import { nowSec } from "../core/time";
 
 type Ctx = { Bindings: Env; Variables: AdminVars };
 const app = new Hono<Ctx>();
@@ -89,20 +90,22 @@ app.use("/*", requireAdmin());
 // Sign-out leaves the browser as on a first visit: both cookies the panel ever sets are
 // expired here, on their own paths. The pages are already no-store and the forms opt out of
 // autofill, so nothing else of the admin's remains on the device.
-app.post("/auth/logout", async (c) => {
-  await readForm(c);
+const signedOut = (c: Context<Ctx>) => {
   c.header("set-cookie", clearSessionCookie());
   c.header("set-cookie", clearOauthCookie(), { append: true });
   return c.redirect("/auth/login", 303);
+};
+
+app.post("/auth/logout", async (c) => {
+  await readForm(c);
+  return signedOut(c);
 });
 
 // For a lost or shared device: every session this admin holds anywhere stops at once, this one too.
 app.post("/auth/logout-all", async (c) => {
   await readForm(c);
-  await revokeSessions(c.env.DB, c.get("admin").sub, Math.floor(Date.now() / 1000));
-  c.header("set-cookie", clearSessionCookie());
-  c.header("set-cookie", clearOauthCookie(), { append: true });
-  return c.redirect("/auth/login", 303);
+  await revokeSessions(c.env.DB, c.get("admin").sub, nowSec());
+  return signedOut(c);
 });
 
 // --- pages ---
@@ -181,6 +184,14 @@ app.post("/apps/:id/rotate", async (c) => {
   const key = await rotateKey(c.env.DB, id);
   const csrf = c.get("admin").csrf;
   return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, { id, key }), csrf));
+});
+
+app.post("/apps/:id/notice-key", async (c) => {
+  await readForm(c);
+  const id = c.req.param("id");
+  const key = await rotateNoticeKey(c.env.DB, id);
+  const csrf = c.get("admin").csrf;
+  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, { id, key, notice: true }), csrf));
 });
 
 app.get("/tokens", async (c) => {

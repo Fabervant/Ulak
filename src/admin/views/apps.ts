@@ -1,10 +1,14 @@
 import { html } from "hono/html";
 import type { AppRow } from "../../core/apps";
 
-export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; key: string }) {
+/** `newKey` is shown once: the app key goes in the app's config, the notice key on its server only. */
+export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; key: string; notice?: boolean }) {
   return html`${newKey
-      ? html`<p class="warn">Key for <strong>${newKey.id}</strong>, shown once. Put it in that app's own config now:</p>
-          <pre><code>${newKey.key}</code></pre>`
+      ? newKey.notice
+        ? html`<p class="warn">Notice key for <strong>${newKey.id}</strong>, shown once. Put it on that app's server only, never in a web page:</p>
+            <pre><code>${newKey.key}</code></pre>`
+        : html`<p class="warn">Key for <strong>${newKey.id}</strong>, shown once. Put it in that app's own config now:</p>
+            <pre><code>${newKey.key}</code></pre>`
       : ""}
     <table>
       <tr><th>app</th><th>retention days, images, owner notices, allowed origins</th><th></th></tr>
@@ -23,6 +27,8 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
           </td>
           <td>
             <form method="post" action="/apps/${a.id}/rotate"><input type="hidden" name="csrf" value="${csrf}" /><button>Rotate key</button></form>
+            <form method="post" action="/apps/${a.id}/notice-key"><input type="hidden" name="csrf" value="${csrf}" /><button>New notice key</button></form>
+            ${a.has_notice_key ? "notice key set" : "no notice key"}
           </td>
         </tr>`,
       )}

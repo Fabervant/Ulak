@@ -2,6 +2,11 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** Unix seconds, the unit of session times and signed-link expiries. */
+export function nowSec(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
 export function addMinutes(iso: string, minutes: number): string {
   return new Date(Date.parse(iso) + minutes * 60_000).toISOString();
 }

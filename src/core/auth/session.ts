@@ -1,3 +1,5 @@
+import { nowSec } from "../time";
+
 const enc = new TextEncoder();
 const b64u = (b: ArrayBuffer | Uint8Array) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
@@ -20,17 +22,20 @@ export const SESSION_RENEW_AFTER_SEC = 3600;
 export interface Session {
   sub: string;
   csrf: string;
-  /** Issue time, Unix seconds: the key for renewal and for `sessions_invalid_before`. */
+  /** Issue time, Unix seconds: the key for renewal and for the 30-day end. */
   iat: number;
+  /** Sign-in time, Unix seconds, kept through every renewal: the key for `sessions_invalid_before`,
+   *  so a renewal minted while "Sign out everywhere" runs is still ended by it. */
+  auth: number;
 }
 
-const nowSec = () => Math.floor(Date.now() / 1000);
-
-/** A renewal passes the old session's csrf so forms already on screen stay valid. */
-export async function createSession(secret: string, sub: string, opts: { ttlSec?: number; csrf?: string; iat?: number } = {}): Promise<string> {
+/** A renewal passes the old session's csrf and sign-in time, so forms already on screen stay valid
+ *  and a revocation of that sign-in reaches the renewed copy. */
+export async function createSession(secret: string, sub: string, opts: { ttlSec?: number; csrf?: string; iat?: number; auth?: number } = {}): Promise<string> {
   const csrf = opts.csrf ?? b64u(crypto.getRandomValues(new Uint8Array(24))).slice(0, 32);
   const iat = opts.iat ?? nowSec();
-  const payload = b64u(enc.encode(JSON.stringify({ sub, csrf, iat, exp: iat + (opts.ttlSec ?? SESSION_TTL_SEC) })));
+  const auth = opts.auth ?? iat;
+  const payload = b64u(enc.encode(JSON.stringify({ sub, csrf, iat, auth, exp: iat + (opts.ttlSec ?? SESSION_TTL_SEC) })));
   return `${payload}.${await mac(secret, payload)}`;
 }
 
@@ -44,9 +49,10 @@ export async function readSession(secret: string, cookie: string | undefined): P
   for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
   if (diff !== 0) return null;
   try {
-    const p = JSON.parse(new TextDecoder().decode(unb64u(payload))) as { sub: string; csrf: string; iat?: number; exp: number };
+    const p = JSON.parse(new TextDecoder().decode(unb64u(payload))) as { sub: string; csrf: string; iat?: number; auth?: number; exp: number };
     if (typeof p.iat !== "number" || p.exp < nowSec()) return null;
-    return { sub: p.sub, csrf: p.csrf, iat: p.iat };
+    // A session issued before sign-in time was recorded began at its own issue time.
+    return { sub: p.sub, csrf: p.csrf, iat: p.iat, auth: typeof p.auth === "number" ? p.auth : p.iat };
   } catch {
     return null;
   }

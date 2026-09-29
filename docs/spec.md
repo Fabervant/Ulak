@@ -161,10 +161,11 @@ Authentication is Google OpenID Connect. The admin identity is the permanent `su
 the first time an allowed email signs in and checked on every request afterward; the email is
 never consulted again. `ADMIN_BOOTSTRAP_EMAILS` lists the emails allowed to pin themselves.
 An authorisation failure is a logged `403`, not a blank page. A session ends 30 days after it
-was issued and is re-issued, keeping its CSRF token, on the first request after it turns an hour
-old, so an admin in use is never signed out. *Sign out everywhere* sets the admin's
-`sessions_invalid_before`, which ends every session issued at or before that second on every
-device; removing the admin row or rotating `SESSION_SECRET` also ends them. Sessions are signed, `HttpOnly`,
+was issued and is re-issued, keeping its CSRF token and its sign-in time, on the first request
+after it turns an hour old, so an admin in use is never signed out. *Sign out everywhere* sets the
+admin's `sessions_invalid_before`, which ends every session signed in at or before that second on
+every device, renewed copies included; removing the admin row or rotating `SESSION_SECRET` also
+ends them. It does not revoke admin API tokens, which are revoked one by one on the tokens page. Sessions are signed, `HttpOnly`,
 `Secure`, `SameSite=Lax` cookies. Forms carry a CSRF token. The surface sends a strict CSP.
 
 The admin surface is English only. Its screens: message list, message detail (reply, set status,
@@ -293,17 +294,23 @@ messages - a reminder, a scheduled nudge - without a second bot or credential.
 
 ```
 POST /v1/notify
-Authorization: Bearer <app key>
+Authorization: Bearer <notice key>
 Content-Type: application/json
 {"text": "..."}
 ```
 
 - Off for every app until the operator ticks *owner notices* for it on the admin surface.
-- Server to server only: a request carrying an `Origin` header is refused, because an app key in
-  a browser is public.
-- `text` is 1 to 500 characters after trimming, sent as plain text prefixed with `[app]`. It is
-  never stored; one row per notice (id, app, time) is kept for a day to count the ceiling.
-- Ceiling: 10 notices per app in any 24 hours, counted in the database and exact.
+- Its own key: the app key ships in web pages and is public, so a notice takes the app's
+  *notice key* (`ulak_notice_<app>_<48 hex>`), issued on the admin surface, shown once, and kept
+  on the app's server only. Issuing a new one ends the old. The app key is refused here.
+- Server to server only: a request carrying an `Origin` header is refused.
+- `text` is sent as one line: every run of line breaks, other control characters and
+  bidirectional overrides becomes a single space, so a notice cannot draw a second alert under
+  another app's name. It is then 1 to 500 characters after trimming, sent as plain text prefixed
+  with `[app]`. It is never stored; one row per notice (id, app, time) is kept for a day to count
+  the ceiling.
+- Ceiling: 10 notices per app in any 24 hours, counted in the database and exact. `Retry-After`
+  is the seconds until the oldest notice in the window leaves it.
 - The notice is sent before the response, so the status says whether it reached the channel.
   A failed delivery gives its place in the ceiling back.
 
@@ -311,9 +318,9 @@ Content-Type: application/json
 |---|---|---|
 | 201 | sent: `{"id"}` | n/a |
 | 400 | `invalid_request` (adds `field`) | no |
-| 401 | `invalid_app_key` | no |
+| 401 | `invalid_notice_key` | no |
 | 403 | `server_only`, `notify_disabled` | no |
 | 413, 415 | as in section 3 | no |
 | 429 | `rate_limited` with `Retry-After` header | yes, after `Retry-After` |
-| 503 | `notifier_unconfigured` (the instance has no channel) | no |
+| 503 | `notifier_unconfigured` (the instance has no working channel) | no |
 | 503 | `notifier_unavailable` (the channel refused) | yes |

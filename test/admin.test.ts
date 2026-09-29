@@ -142,10 +142,22 @@ describe("admin surface", () => {
     const rotated = await form("/apps/newapp/rotate", {});
     expect(await rotated.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
   });
+  it("the apps page issues a notice key, shown once and marked as server-only, and then says one exists", async () => {
+    expect(await (await req("/apps")).text()).toContain("no notice key");
+    const issued = await (await form("/apps/demo/notice-key", {})).text();
+    expect(issued).toMatch(/ulak_notice_demo_[0-9a-f]{48}/);
+    expect(issued).toContain("never in a web page");
+    const after = await (await req("/apps")).text();
+    expect(after).not.toMatch(/ulak_notice_demo_[0-9a-f]{48}/);
+    expect(after).toContain("notice key set");
+  });
   it("the tokens page creates, lists and revokes an admin token", async () => {
     const tok = await form("/tokens", { name: "laptop" });
     expect(await tok.text()).toMatch(/ulak_admin_[0-9a-f]{48}/);
-    expect(await (await req("/tokens")).text()).toContain("laptop");
+    const page = await (await req("/tokens")).text();
+    expect(page).toContain("laptop");
+    // Sign out everywhere ends browser sessions only; the page says where a lost device's token is ended.
+    expect(page).toContain("Sign out everywhere does not revoke these");
     const [t] = await listAdminTokens(env.DB);
     expect((await form(`/tokens/${t!.id}/revoke`, {})).status).toBe(303);
     expect((await listAdminTokens(env.DB))[0]!.revoked_at).not.toBeNull();
@@ -279,5 +291,14 @@ describe("a session lives while used and can be ended everywhere", () => {
     await revokeSessions(env.DB, "sub-1", T);
     expect((await req("/", {}, await createSession("s3", "sub-1", { iat: T }))).status).toBe(302);
     expect((await req("/", {}, await createSession("s3", "sub-1", { iat: T + 1 }))).status).toBe(200);
+  });
+
+  it("a renewal racing sign out everywhere cannot outlive it: revocation goes by the sign-in, not the renewal", async () => {
+    const signedIn = hoursAgo(2);
+    cookie = await createSession("s3", "sub-1", { csrf, iat: signedIn });
+    // The renewal is minted in the second after the revocation's cutoff, as when the two cross.
+    const renewed = sessionValue(sessionSet(await req("/"))!);
+    await revokeSessions(env.DB, "sub-1", nowSec() - 1);
+    expect((await req("/", {}, renewed)).status).toBe(302);
   });
 });

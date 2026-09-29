@@ -24,10 +24,15 @@ export function buildNotification(row: MessageRow, adminUrl: string): Notificati
   return { text, adminLink: `${adminUrl.replace(/\/$/, "")}/m/${row.id}` };
 }
 
+/** The channel that reaches the operator, or null when this instance has none that can send. */
+export function channelFromEnv(env: Env): Notifier | null {
+  if (env.NOTIFIER === "telegram" && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) return new TelegramNotifier(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID);
+  return null;
+}
+
 export function notifierFromEnv(env: Env): Notifier {
-  if (env.NOTIFIER === "telegram") {
-    if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) throw new Error("NOTIFIER=telegram needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets");
-    return new TelegramNotifier(env.TELEGRAM_BOT_TOKEN, env.TELEGRAM_CHAT_ID);
-  }
+  const channel = channelFromEnv(env);
+  if (channel) return channel;
+  if (env.NOTIFIER === "telegram") throw new Error("NOTIFIER=telegram needs TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID secrets");
   return new NoopNotifier();
 }

@@ -9,6 +9,8 @@ export interface AppRow {
   notify_enabled: boolean;
   allowed_origins: string[];
   created_at: string;
+  /** Whether owner notices have a key; the key itself is shown once and only its hash is kept. */
+  has_notice_key: boolean;
 }
 
 type AppPatch = Partial<Pick<AppRow, "retention_days" | "images_enabled" | "notify_enabled" | "allowed_origins">>;
@@ -21,12 +23,20 @@ interface Raw {
   notify_enabled: number;
   allowed_origins: string;
   created_at: string;
+  notice_key_hash: string | null;
 }
 
-const toRow = (r: Raw): AppRow => ({ ...r, images_enabled: r.images_enabled === 1, notify_enabled: r.notify_enabled === 1, allowed_origins: JSON.parse(r.allowed_origins) as string[] });
+const toRow = ({ notice_key_hash, ...r }: Raw): AppRow => ({
+  ...r,
+  images_enabled: r.images_enabled === 1,
+  notify_enabled: r.notify_enabled === 1,
+  allowed_origins: JSON.parse(r.allowed_origins) as string[],
+  has_notice_key: notice_key_hash !== null,
+});
 
 export const APP_ID = /^[a-z0-9_-]{2,32}$/;
 const KEY = /^ulak_[a-z0-9_-]{2,32}_[0-9a-f]{48}$/;
+const NOTICE_KEY = /^ulak_notice_[a-z0-9_-]{2,32}_[0-9a-f]{48}$/;
 const ORIGIN = /^https?:\/\/[^/\s]+$/;
 
 function validatePatch(cur: AppRow, patch: AppPatch): { days: number; images: boolean; notify: boolean; origins: string[] } {
@@ -40,7 +50,7 @@ function validatePatch(cur: AppRow, patch: AppPatch): { days: number; images: bo
 export async function createApp(db: D1Database, id: string, opts: AppPatch = {}): Promise<{ app: AppRow; key: string }> {
   if (!APP_ID.test(id)) throw new Error("app id must match [a-z0-9_-]{2,32}");
   if (await getApp(db, id)) throw new Error(`app ${id} already exists`);
-  const defaults: AppRow = { id, key_hash: "", retention_days: 90, images_enabled: false, notify_enabled: false, allowed_origins: [], created_at: "" };
+  const defaults: AppRow = { id, key_hash: "", retention_days: 90, images_enabled: false, notify_enabled: false, allowed_origins: [], created_at: "", has_notice_key: false };
   const { days, images, notify, origins } = validatePatch(defaults, opts);
   const key = randomToken(`ulak_${id}`);
   await db
@@ -80,6 +90,20 @@ export async function rotateKey(db: D1Database, id: string): Promise<string> {
   const r = await db.prepare("UPDATE apps SET key_hash=? WHERE id=?").bind(await sha256Hex(key), id).run();
   if (!r.meta.changes) throw new Error(`app ${id} not found`);
   return key;
+}
+
+/** Issues the app's owner-notice key, replacing any earlier one. It belongs on the app's server only. */
+export async function rotateNoticeKey(db: D1Database, id: string): Promise<string> {
+  const key = randomToken(`ulak_notice_${id}`);
+  const r = await db.prepare("UPDATE apps SET notice_key_hash=? WHERE id=?").bind(await sha256Hex(key), id).run();
+  if (!r.meta.changes) throw new Error(`app ${id} not found`);
+  return key;
+}
+
+export async function findAppByNoticeKey(db: D1Database, key: string): Promise<AppRow | null> {
+  if (!NOTICE_KEY.test(key)) return null;
+  const r = await db.prepare("SELECT * FROM apps WHERE notice_key_hash=?").bind(await sha256Hex(key)).first<Raw>();
+  return r ? toRow(r) : null;
 }
 
 export async function allAllowedOrigins(db: D1Database): Promise<Set<string>> {

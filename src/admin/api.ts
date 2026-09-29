@@ -9,7 +9,7 @@ import { listImagesFor, deleteImageObjects } from "../core/images";
 import { signImageUrl } from "../core/signedurl";
 import { runChecks } from "../core/checks";
 import { listApps } from "../core/apps";
-import { isIso } from "../core/time";
+import { isIso, nowSec } from "../core/time";
 
 export const api = new Hono<{ Bindings: Env; Variables: AdminTokenVars }>();
 
@@ -23,7 +23,7 @@ const notFound = () => new ApiError(404, "not_found", "no such message", false);
 export async function imageLinks(env: Env, ids: string[]): Promise<string[] | null> {
   const secret = env.IMAGE_URL_SECRET;
   if (!secret) return null;
-  const exp = Math.floor(Date.now() / 1000) + 600;
+  const exp = nowSec() + 600;
   return Promise.all(ids.map((id) => signImageUrl(secret, env.IMAGES_URL, id, exp)));
 }
 
