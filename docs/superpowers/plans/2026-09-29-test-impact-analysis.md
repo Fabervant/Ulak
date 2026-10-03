@@ -1,6 +1,7 @@
 # Test impact analysis - plan
 
-Date: 2026-09-29. Status: planned, not built.
+Date: 2026-09-29. Status: built in Session 7 (`scripts/test-impact.mjs`); selection uses Vitest's Node
+API with an explicit changed-file list rather than `--changed`, and always adds the hygiene test.
 
 ## Goal
 Local test runs between pushes run only the test files a change can affect. Every push and every
