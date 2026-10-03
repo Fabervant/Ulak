@@ -14,8 +14,8 @@ path in `test/images.test.ts`.
 
 | Seam | Production default | What the suite ran before | What drives the default now |
 | --- | --- | --- | --- |
-| `codecFromEnv` → `BindingCodec.info` | Images binding | `PassthroughCodec` — no image service was bound in the test config | The test config binds the image service, so the whole suite takes the production branch; the seam test drives `info` on PNG, JPEG, a vector, and bytes that cannot be decoded |
-| `codecFromEnv` → `BindingCodec.reencode` | Images binding | `PassthroughCodec`, plus a hand-written echo binding for the metadata fix | The real binding re-encodes both formats and the result is checked for format and for leftover JPEG metadata |
+| `imageCodecFor` → `BindingCodec.info` | Images binding | `PassthroughCodec` — no image service was bound in the test config; the class was removed in the first refactor round on `src/core/images.ts`, and an instance without the binding now refuses uploads | The test config binds the image service, so the whole suite takes the production branch; the seam test drives `info` on PNG, JPEG, a vector, and bytes that cannot be decoded |
+| `imageCodecFor` → `BindingCodec.reencode` | Images binding | `PassthroughCodec`, plus a hand-written echo binding for the metadata fix | The real binding re-encodes all three formats and the result is checked for format and for leftover metadata; the echo binding proves Ulak strips each format itself |
 | `limiterFor` → `BindingRateLimiter` | Rate-limit binding | `MemoryRateLimiter` — no namespace was bound | A probe namespace, `RL_PROBE`, exists in the test config only; the seam test drives the adapter against the real binding until the namespace is spent |
 | `TelegramNotifier` transport | `defaultFetch` | an injected function, every time | The probe added after the first deployment, now over the shared `defaultFetch` |
 | `exchangeCode` transport | `defaultFetch` | an injected function, every time | The same probe: both call sites now default to one exported value, so one test covers both |

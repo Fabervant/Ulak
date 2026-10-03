@@ -1,5 +1,8 @@
+import type { Env } from "./env";
 import { ApiError } from "./errors";
 import { newId, sha256Hex } from "./ids";
+import { allClaimable, claimStatement, deleteImagesWhere } from "./images";
+import { D1_MAX_PARAMS, placeholders } from "./sql";
 import { nowIso } from "./time";
 import type { SubmitPayload } from "./validate";
 
@@ -50,11 +53,14 @@ export interface SubmitWindows {
 
 const COLUMNS = "id,app,app_version,app_build,platform,user_ref,message,client_ts,client_msg_id,locale,last_error,contact_email,context,body_hash,status,received_at,last_activity_at";
 
-/** Inserts the message, or returns the row an identical earlier submit created.
+/** Inserts the message with its attachments, or returns the row an identical earlier submit created.
  *
- *  With `windows`, the insert itself refuses when the user has reached a ceiling: the count
- *  and the insert are one statement, which SQLite runs atomically, so parallel submits cannot
- *  each read the same count and all pass. A separate read-then-insert did exactly that. */
+ *  The checks are part of the insert, so nothing can change between a check and the write: with
+ *  `windows`, the insert refuses when the user has reached a ceiling, and with attachments it
+ *  refuses unless every one is still claimable. The claim runs in the same batch, which D1 runs
+ *  as one transaction, so a message is saved with all its images or not at all. A separate
+ *  read-then-write let parallel submits pass one ceiling, and let the loser of a race for one
+ *  image keep a message without it. */
 export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnReceipt: string, windows?: SubmitWindows): Promise<{ row: MessageRow; created: boolean }> {
   const hash = await bodyHash(p);
   const existing = await findByIdempotency(db, p.app, p.user_ref, p.client_msg_id);
@@ -65,19 +71,25 @@ export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnRe
   const id = newId();
   const now = nowIso();
   const values = [id, p.app, p.app_version, p.app_build, p.platform, p.user_ref, p.message, p.client_ts, p.client_msg_id, p.locale, p.last_error, p.contact_email, p.context, hash, statusOnReceipt, now, now];
-  const stmt =
-    windows && p.user_ref
-      ? db
-          .prepare(
-            `INSERT INTO messages (${COLUMNS}) SELECT ${values.map((_, i) => `?${i + 1}`).join(",")}
-             WHERE (SELECT COUNT(*) FROM messages WHERE app=?2 AND user_ref=?6 AND received_at>=?18) < ?19
-               AND (SELECT COUNT(*) FROM messages WHERE app=?2 AND user_ref=?6 AND received_at>=?20) < ?21`,
-          )
-          .bind(...values, windows.sinceBurstIso, windows.burstLimit, windows.sinceHourIso, windows.hourLimit)
-      : db.prepare(`INSERT INTO messages (${COLUMNS}) VALUES (${values.map(() => "?").join(",")})`).bind(...values);
+  const conds: string[] = [];
+  const condBinds: unknown[] = [];
+  if (windows && p.user_ref) {
+    const below = "(SELECT COUNT(*) FROM messages WHERE app=? AND user_ref=? AND received_at>=?) < ?";
+    conds.push(below, below);
+    condBinds.push(p.app, p.user_ref, windows.sinceBurstIso, windows.burstLimit, p.app, p.user_ref, windows.sinceHourIso, windows.hourLimit);
+  }
+  if (p.attachments.length) {
+    const claimable = allClaimable(p.app, p.user_ref, p.attachments);
+    conds.push(claimable.sql);
+    condBinds.push(...claimable.binds);
+  }
+  const insert = db
+    .prepare(`INSERT INTO messages (${COLUMNS}) SELECT ${placeholders(values.length)}${conds.length ? ` WHERE ${conds.join(" AND ")}` : ""}`)
+    .bind(...values, ...condBinds);
+  const statements = p.attachments.length ? [insert, claimStatement(db, p.app, p.user_ref, id, p.attachments)] : [insert];
   try {
-    const { meta } = await stmt.run();
-    if (meta.changes === 0) throw await rateLimited(db, p.app, p.user_ref!, windows!);
+    const [inserted] = await db.batch(statements);
+    if (inserted!.meta.changes === 0) throw await refusal(db, p, windows!);
   } catch (e) {
     // Lost a race with an identical concurrent submit: re-read and apply the same rule.
     if (String(e).includes("UNIQUE")) {
@@ -88,6 +100,18 @@ export async function insertMessage(db: D1Database, p: SubmitPayload, statusOnRe
     throw e;
   }
   return { row: (await getMessage(db, id))!, created: true };
+}
+
+/** Why the insert refused, read after the fact: an attachment no longer claimable comes first,
+ *  as the client must change the request, then the ceiling, so the client gets the right wait. */
+async function refusal(db: D1Database, p: SubmitPayload, w: SubmitWindows): Promise<ApiError> {
+  if (p.attachments.length) {
+    const c = allClaimable(p.app, p.user_ref, p.attachments);
+    if (!(await db.prepare(`SELECT ${c.sql} ok`).bind(...c.binds).first<{ ok: number }>())?.ok) {
+      return new ApiError(400, "invalid_request", "an attachment id is unknown, already used, or not yours", false, { field: "attachments" });
+    }
+  }
+  return rateLimited(db, p.app, p.user_ref!, w);
 }
 
 /** Which ceiling refused the insert, read after the fact so the client gets the right wait. */
@@ -133,30 +157,32 @@ export async function setStatus(db: D1Database, id: string, status: string): Pro
   if (!r.meta.changes) throw new Error("message not found");
 }
 
-/** Hard deletion of everything a user_ref owns in one app. Cascades take the replies; image rows go here, objects by the caller. */
-export async function deleteUser(db: D1Database, app: string, user_ref: string): Promise<{ deleted_messages: number; image_keys: string[] }> {
-  const keys = (await db.prepare("SELECT r2_key FROM images WHERE app=? AND user_ref=?").bind(app, user_ref).all<{ r2_key: string }>()).results.map((r) => r.r2_key);
+/** Hard deletion of everything a user_ref owns in one app: images first, objects before rows,
+ *  then the messages, whose cascade takes the replies. */
+export async function deleteUser(env: Env, app: string, user_ref: string): Promise<{ deleted_messages: number }> {
+  await deleteImagesWhere(env, "app=? AND user_ref=?", [app, user_ref]);
   // meta.changes would include cascaded reply rows, so count first.
-  const n = (await db.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).first<{ n: number }>())?.n ?? 0;
-  await db.batch([
-    db.prepare("DELETE FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref),
-    db.prepare("DELETE FROM images WHERE app=? AND user_ref=?").bind(app, user_ref),
-  ]);
-  return { deleted_messages: n, image_keys: keys };
+  const n = (await env.DB.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).first<{ n: number }>())?.n ?? 0;
+  await env.DB.prepare("DELETE FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).run();
+  return { deleted_messages: n };
 }
 
-/** Rows past their app's retention, measured from last activity. Deletes them and returns their image keys. */
-export async function expireMessages(db: D1Database, nowIso_: string): Promise<{ expired: number; image_keys: string[] }> {
-  const due = await db
-    .prepare(`SELECT m.id FROM messages m JOIN apps a ON a.id=m.app WHERE m.last_activity_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' || a.retention_days || ' days')`)
-    .bind(nowIso_)
-    .all<{ id: string }>();
-  const ids = due.results.map((r) => r.id);
-  if (!ids.length) return { expired: 0, image_keys: [] };
-  const ph = ids.map(() => "?").join(",");
-  const keys = (await db.prepare(`SELECT r2_key FROM images WHERE message_id IN (${ph})`).bind(...ids).all<{ r2_key: string }>()).results.map((r) => r.r2_key);
-  await db.prepare(`DELETE FROM messages WHERE id IN (${ph})`).bind(...ids).run();
-  return { expired: ids.length, image_keys: keys };
+/** Deletes the messages past their app's retention, measured from last activity, with their
+ *  images, a slice at a time so no statement binds more ids than D1 accepts. */
+export async function expireMessages(env: Env, nowIso_: string): Promise<number> {
+  const due = env.DB.prepare(
+    `SELECT m.id FROM messages m JOIN apps a ON a.id=m.app WHERE m.last_activity_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' || a.retention_days || ' days') LIMIT ${D1_MAX_PARAMS}`,
+  ).bind(nowIso_);
+  let expired = 0;
+  for (;;) {
+    const ids = (await due.all<{ id: string }>()).results.map((r) => r.id);
+    if (!ids.length) return expired;
+    const ph = placeholders(ids.length);
+    await deleteImagesWhere(env, `message_id IN (${ph})`, ids);
+    await env.DB.prepare(`DELETE FROM messages WHERE id IN (${ph})`).bind(...ids).run();
+    expired += ids.length;
+    if (ids.length < D1_MAX_PARAMS) return expired;
+  }
 }
 
 export async function unnotified(db: D1Database, maxAttempts: number, limit = 50): Promise<MessageRow[]> {

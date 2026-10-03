@@ -1,3 +1,4 @@
+import { placeholders, slices } from "./sql";
 import { newId } from "./ids";
 import { nowIso } from "./time";
 
@@ -29,8 +30,13 @@ export async function listReplies(db: D1Database, messageId: string): Promise<Re
 export async function listRepliesFor(db: D1Database, messageIds: string[]): Promise<Map<string, ReplyRow[]>> {
   const out = new Map<string, ReplyRow[]>();
   if (!messageIds.length) return out;
-  const q = `SELECT * FROM replies WHERE message_id IN (${messageIds.map(() => "?").join(",")}) ORDER BY created_at, id`;
-  for (const r of (await db.prepare(q).bind(...messageIds).all<ReplyRow>()).results) {
+  // Every reply of one message falls in one slice, so each list keeps the slice's order.
+  const rows: ReplyRow[] = [];
+  for (const ids of slices(messageIds)) {
+    const q = `SELECT * FROM replies WHERE message_id IN (${placeholders(ids.length)}) ORDER BY created_at, id`;
+    rows.push(...(await db.prepare(q).bind(...ids).all<ReplyRow>()).results);
+  }
+  for (const r of rows) {
     let list = out.get(r.message_id);
     if (!list) {
       list = [];

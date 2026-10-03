@@ -197,8 +197,11 @@ Mandatory handling, all tested:
    image_service_unavailable`, retryable, which is a different thing and is answered as one.
 2. Caps checked before decoding: 5 MB per file, 4096 pixels per side, 3 images per message.
 3. Every upload is decoded and re-encoded server-side. The client's bytes are never stored or
-   served. Re-encoding strips all metadata, verified by a test that uploads a JPEG with GPS EXIF and
-   asserts the stored object has none.
+   served. Ulak then strips the metadata from the re-encoded file itself, in all three formats,
+   whatever the re-encoder kept: tests upload a JPEG with GPS EXIF, a PNG with text, EXIF and time
+   chunks, and a WebP with EXIF and XMP, and assert the stored objects carry none. An instance
+   without the image service answers every upload `403 images_disabled`; it never stores bytes
+   nobody re-encoded.
 4. The client's filename is never used; every image has an opaque id.
 5. Images are served only from the image origin, only through signed URLs valid for 10 minutes,
    with `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` and a CSP of

@@ -4,7 +4,8 @@ import { createApp } from "../src/core/apps";
 import { insertMessage } from "../src/core/messages";
 import { createAdminToken, revokeAdminToken } from "../src/core/auth/admintoken";
 import { addMinutes, nowIso } from "../src/core/time";
-import { submission, adminRequest } from "./helpers";
+import { submission, adminRequest, withD1ParamLimit, seedMessages } from "./helpers";
+import { addReply } from "../src/core/replies";
 
 const E = { ...env, SESSION_SECRET: "s3", IMAGE_URL_SECRET: "i3" };
 let token: string;
@@ -40,6 +41,19 @@ describe("admin API", () => {
     expect(one.body_hash).toBeUndefined();
     expect((await call(`/api/messages/${crypto.randomUUID()}`)).status).toBe(404);
     expect((await call("/api/messages?since=nope")).status).toBe(400);
+  });
+  it("lists more messages than one statement may bind, with their reply and image counts", async () => {
+    const ids = await seedMessages(150, nowIso());
+    await addReply(env.DB, ids[0]!, "owner", "first");
+    await addReply(env.DB, ids[149]!, "owner", "last");
+    await env.DB.prepare("INSERT INTO images (id,app,message_id,user_ref,r2_key,content_type,bytes,width,height,created_at) VALUES ('i1','demo',?,NULL,'k','image/png',1,1,1,?)").bind(ids[149], nowIso()).run();
+    const res = await adminRequest({ ...E, DB: withD1ParamLimit(env.DB) }, "/api/messages?limit=150", { headers: { authorization: `Bearer ${token}` } });
+    expect(res.status).toBe(200);
+    const list = (await res.json<{ messages: Array<{ id: string; reply_count: number; image_count: number }> }>()).messages;
+    expect(list).toHaveLength(150);
+    const byId = new Map(list.map((m) => [m.id, m]));
+    expect(byId.get(ids[0]!)).toMatchObject({ reply_count: 1, image_count: 0 });
+    expect(byId.get(ids[149]!)).toMatchObject({ reply_count: 1, image_count: 1 });
   });
   it("replies, sets status, deletes a user, lists apps without key hashes", async () => {
     const m = (await insertMessage(env.DB, mk(), "pending")).row;

@@ -2,14 +2,15 @@ import type { Env } from "./env";
 import type { AppRow } from "./apps";
 import { ApiError } from "./errors";
 import { newId } from "./ids";
+import { D1_MAX_PARAMS, placeholders } from "./sql";
 import { nowIso, addMinutes } from "./time";
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const MAX_IMAGE_SIDE = 4096;
-export const CLAIM_WINDOW_MIN = 15;
-export type ImageType = "image/png" | "image/jpeg" | "image/webp";
+const MAX_IMAGE_SIDE = 4096;
+const CLAIM_WINDOW_MIN = 15;
+type ImageType = "image/png" | "image/jpeg" | "image/webp";
 
-export interface ImageRow {
+interface ImageRow {
   id: string;
   app: string;
   message_id: string | null;
@@ -22,6 +23,8 @@ export interface ImageRow {
   created_at: string;
 }
 
+export const imageTooLarge = () => new ApiError(413, "payload_too_large", `image exceeds ${MAX_IMAGE_BYTES} bytes`, false, { max_bytes: MAX_IMAGE_BYTES });
+
 /** Type from the file's own bytes; the declared Content-Type and filename are never consulted. */
 export function sniffImageType(b: Uint8Array): ImageType | null {
   if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
@@ -29,13 +32,6 @@ export function sniffImageType(b: Uint8Array): ImageType | null {
   if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
   return null;
 }
-
-export interface ImageCodec {
-  info(bytes: ArrayBuffer): Promise<{ width: number; height: number }>;
-  reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer>;
-}
-
-const notRaster = () => new ApiError(415, "unsupported_media_type", "not a raster image", false);
 
 /** The image service reports a file it cannot read by throwing its own error type, carrying a
  *  numeric code. That is the client's file, not an outage, so it answers 415 and is never
@@ -53,8 +49,7 @@ const notRaster = () => new ApiError(415, "unsupported_media_type", "not a raste
  *  503; an unlisted or new number keeps the 415 rule.
  *
  *  Anything thrown without a numeric code did not come from the service refusing the file, so
- *  it stays a retryable 503. Neither branch may fall through to the generic 500, which is what
- *  the live instance answered before this existed. */
+ *  it stays a retryable 503. Neither branch may fall through to the generic 500. */
 const SERVICE_CONDITION_CODES = new Set([
   9422, // usage limit reached
   9432, // account billing cannot use the binding
@@ -64,7 +59,6 @@ const SERVICE_CONDITION_CODES = new Set([
 ]);
 
 function asImageError(e: unknown): ApiError {
-  if (e instanceof ApiError) return e;
   const code = typeof e === "object" && e !== null && "code" in e ? (e as { code: unknown }).code : undefined;
   const unavailable = (extra = {}) => new ApiError(503, "image_service_unavailable", "the image service could not process this upload; retry shortly", true, extra);
   if (typeof code !== "number") return unavailable();
@@ -72,15 +66,16 @@ function asImageError(e: unknown): ApiError {
   return new ApiError(415, "unsupported_media_type", "the image could not be decoded; it may be incomplete or damaged", false, { platform_code: code });
 }
 
+const dv = (b: Uint8Array) => new DataView(b.buffer, b.byteOffset, b.byteLength);
+const joined = (parts: Uint8Array[]) => new Blob(parts).arrayBuffer();
+
 /** Removes every JPEG metadata segment: APP1-APP15 (EXIF, XMP, ICC, IPTC/Photoshop) and
  *  COM comments. APP0/JFIF is kept because decoders expect it and it carries only density.
  *  APP14/Adobe is kept because it carries only the colour-transform flag, and without it a
- *  decoder guesses the colour space of an Adobe RGB or CMYK file and gets it wrong.
- *  Ulak strips metadata itself rather than trusting a re-encoder's defaults: Cloudflare's
- *  transform keeps the EXIF copyright tag on JPEG by default, and defaults can change. */
-export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
+ *  decoder guesses the colour space of an Adobe RGB or CMYK file and gets it wrong. */
+export function stripJpegMetadata(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   const b = new Uint8Array(bytes);
-  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return bytes.slice(0);
+  if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return joined([b]);
   const parts: Uint8Array[] = [b.subarray(0, 2)];
   let i = 2;
   while (i < b.length - 3 && b[i] === 0xff) {
@@ -92,80 +87,93 @@ export function stripJpegMetadata(bytes: ArrayBuffer): ArrayBuffer {
     i += 2 + len;
   }
   parts.push(b.subarray(i));
-  const out = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0));
-  let off = 0;
-  for (const p of parts) {
-    out.set(p, off);
-    off += p.byteLength;
-  }
-  return out.buffer;
+  return joined(parts);
 }
 
-/** Production: the Images binding re-encodes, then Ulak strips the metadata it leaves behind. */
-export class BindingCodec implements ImageCodec {
+/** The PNG chunks a stored image keeps: the critical ones (an upper-case first letter) and the
+ *  few ancillary ones that change how the pixels look. Text, EXIF, time, ICC profiles and every
+ *  chunk not named here go. A chunk that runs past the end ends the walk; nothing after it is
+ *  copied, because the walk can no longer tell metadata from pixels there. */
+const PNG_KEPT_ANCILLARY = new Set(["tRNS", "gAMA", "cHRM", "sRGB"]);
+
+function stripPngMetadata(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  const b = new Uint8Array(bytes);
+  const parts: Uint8Array[] = [b.subarray(0, 8)];
+  for (let i = 8; i + 12 <= b.length; ) {
+    const end = i + 12 + dv(b).getUint32(i);
+    if (end > b.length) break;
+    const type = String.fromCharCode(...b.subarray(i + 4, i + 8));
+    if (type.charCodeAt(0) < 0x61 || PNG_KEPT_ANCILLARY.has(type)) parts.push(b.subarray(i, end));
+    i = end;
+  }
+  return joined(parts);
+}
+
+/** Removes the EXIF, XMP and ICC chunks from a WebP, clears the flags in its extended header
+ *  that announce them, and rewrites the container size. Chunks are padded to an even length. */
+const WEBP_DROPPED = new Set(["EXIF", "XMP ", "ICCP"]);
+const VP8X_METADATA_FLAGS = 0x20 | 0x08 | 0x04; // ICC, EXIF, XMP
+
+function stripWebpMetadata(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  const b = new Uint8Array(bytes);
+  const head = b.slice(0, 12);
+  const parts: Uint8Array[] = [head];
+  for (let i = 12; i + 8 <= b.length; ) {
+    const size = dv(b).getUint32(i + 4, true);
+    const end = i + 8 + size + (size & 1);
+    if (end > b.length) break;
+    const fourcc = String.fromCharCode(...b.subarray(i, i + 4));
+    const chunk = b.slice(i, end);
+    if (fourcc === "VP8X") chunk[8]! &= ~VP8X_METADATA_FLAGS;
+    if (!WEBP_DROPPED.has(fourcc)) parts.push(chunk);
+    i = end;
+  }
+  dv(head).setUint32(4, parts.reduce((n, p) => n + p.byteLength, 0) - 8, true);
+  return joined(parts);
+}
+
+/** Ulak removes metadata itself rather than trusting a re-encoder's defaults: Cloudflare's
+ *  transform keeps the EXIF copyright tag on JPEG by default and was seen returning GPS
+ *  coordinates intact, and a default that holds for one format today can change. */
+const STRIPPERS: Record<ImageType, (bytes: ArrayBuffer) => Promise<ArrayBuffer>> = {
+  "image/jpeg": stripJpegMetadata,
+  "image/png": stripPngMetadata,
+  "image/webp": stripWebpMetadata,
+};
+
+/** A call to the image service, whatever it throws answered as asImageError decides. */
+async function fromService<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (e) {
+    throw asImageError(e);
+  }
+}
+
+/** The Images binding decodes and re-encodes; Ulak then strips what the re-encoder left. */
+export class BindingCodec {
   constructor(private img: ImagesBinding) {}
   async info(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
-    let i;
-    try {
-      i = await this.img.info(new Blob([bytes]).stream());
-    } catch (e) {
-      throw asImageError(e);
-    }
+    const i = await fromService(() => this.img.info(new Blob([bytes]).stream()));
     // A vector answers without a width. It is not a raster and Ulak never stores one.
-    if (!("width" in i)) throw notRaster();
+    if (!("width" in i)) throw new ApiError(415, "unsupported_media_type", "not a raster image", false);
     return { width: i.width, height: i.height };
   }
   async reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer> {
-    let encoded: ArrayBuffer;
-    try {
-      const out = await this.img.input(new Blob([bytes]).stream()).output({ format: type, quality: 85 });
-      encoded = await out.response().arrayBuffer();
-    } catch (e) {
-      throw asImageError(e);
-    }
-    // WebP and PNG output always drops EXIF; JPEG does not, so strip it ourselves.
-    return type === "image/jpeg" ? stripJpegMetadata(encoded) : encoded;
+    const out = await fromService(async () => (await this.img.input(new Blob([bytes]).stream()).output({ format: type, quality: 85 })).response().arrayBuffer());
+    return STRIPPERS[type](out);
   }
 }
 
-const dv = (b: Uint8Array) => new DataView(b.buffer, b.byteOffset, b.byteLength);
-
-/** Tests and local dev without the binding: dimensions from headers, no re-encoding.
- *  Metadata is removed by the same stripper production uses. Not for production. */
-export class PassthroughCodec implements ImageCodec {
-  async info(bytes: ArrayBuffer): Promise<{ width: number; height: number }> {
-    const b = new Uint8Array(bytes);
-    const t = sniffImageType(b);
-    if (t === "image/png") return { width: dv(b).getUint32(16), height: dv(b).getUint32(20) };
-    if (t === "image/jpeg") {
-      let i = 2;
-      while (i < b.length - 9) {
-        if (b[i] !== 0xff) {
-          i++;
-          continue;
-        }
-        const marker = b[i + 1]!;
-        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-          return { height: dv(b).getUint16(i + 5), width: dv(b).getUint16(i + 7) };
-        }
-        i += 2 + dv(b).getUint16(i + 2);
-      }
-    }
-    if (t === "image/webp") return { width: 1, height: 1 };
-    throw notRaster();
-  }
-  async reencode(bytes: ArrayBuffer, type: ImageType): Promise<ArrayBuffer> {
-    return type === "image/jpeg" ? stripJpegMetadata(bytes) : bytes.slice(0);
-  }
+/** The codec for an app's uploads, or 403 when the app or this instance takes no images. An
+ *  instance without the image service refuses uploads rather than store bytes nobody re-encoded. */
+export function imageCodecFor(env: Env, app: AppRow): BindingCodec {
+  if (!app.images_enabled || !env.IMG) throw new ApiError(403, "images_disabled", "this app does not accept images", false);
+  return new BindingCodec(env.IMG);
 }
 
-export function codecFromEnv(env: Env): ImageCodec {
-  return env.IMG ? new BindingCodec(env.IMG) : new PassthroughCodec();
-}
-
-export async function uploadImage(env: Env, codec: ImageCodec, app: AppRow, user_ref: string | null, bytes: ArrayBuffer): Promise<{ id: string }> {
-  if (!app.images_enabled) throw new ApiError(403, "images_disabled", "this app does not accept images", false);
-  if (bytes.byteLength > MAX_IMAGE_BYTES) throw new ApiError(413, "payload_too_large", `image exceeds ${MAX_IMAGE_BYTES} bytes`, false, { max_bytes: MAX_IMAGE_BYTES });
+export async function uploadImage(env: Env, codec: BindingCodec, app: AppRow, user_ref: string | null, bytes: ArrayBuffer): Promise<{ id: string }> {
+  if (bytes.byteLength > MAX_IMAGE_BYTES) throw imageTooLarge();
   const type = sniffImageType(new Uint8Array(bytes));
   if (!type) throw new ApiError(415, "unsupported_media_type", "only PNG, JPEG and WebP are accepted", false);
   const { width, height } = await codec.info(bytes);
@@ -188,37 +196,37 @@ export async function listImagesFor(db: D1Database, messageId: string): Promise<
   return (await db.prepare("SELECT * FROM images WHERE message_id=? ORDER BY created_at").bind(messageId).all<ImageRow>()).results;
 }
 
-/** How many of these ids are uploaded, unclaimed, and owned by this app and user. */
-export async function countClaimable(db: D1Database, app: string, user_ref: string | null, ids: string[]): Promise<number> {
-  if (!ids.length) return 0;
-  const ph = ids.map(() => "?").join(",");
-  const r = await db
-    .prepare(`SELECT COUNT(*) n FROM images WHERE id IN (${ph}) AND app=? AND message_id IS NULL AND COALESCE(user_ref,'')=?`)
-    .bind(...ids, app, user_ref ?? "")
-    .first<{ n: number }>();
-  return r?.n ?? 0;
+/** An upload a message may still take: same app and user, not on a message yet. */
+const CLAIMABLE = "app=? AND message_id IS NULL AND COALESCE(user_ref,'')=?";
+
+/** A condition, with its binds, that holds when every id is claimable by this app and user. A
+ *  repeated id counts once, so a list naming one upload twice never holds. */
+export function allClaimable(app: string, user_ref: string | null, ids: string[]): { sql: string; binds: unknown[] } {
+  return { sql: `(SELECT COUNT(*) FROM images WHERE id IN (${placeholders(ids.length)}) AND ${CLAIMABLE})=?`, binds: [...ids, app, user_ref ?? "", ids.length] };
 }
 
-/** Attaches uploaded, unclaimed images of the same app and user to a message. Any bad id fails with 400. */
-export async function claimImages(db: D1Database, app: string, user_ref: string | null, messageId: string, ids: string[]): Promise<void> {
-  for (const id of ids) {
-    const r = await db
-      .prepare("UPDATE images SET message_id=? WHERE id=? AND app=? AND message_id IS NULL AND COALESCE(user_ref,'')=?")
-      .bind(messageId, id, app, user_ref ?? "")
-      .run();
-    if (!r.meta.changes) throw new ApiError(400, "invalid_request", `attachment ${id} is unknown, already used, or not yours`, false, { field: "attachments" });
+/** Attaches the ids to the message, if the message exists. Batched after the insert that
+ *  checked allClaimable, it claims exactly the images that insert counted, or nothing. */
+export function claimStatement(db: D1Database, app: string, user_ref: string | null, messageId: string, ids: string[]): D1PreparedStatement {
+  return db
+    .prepare(`UPDATE images SET message_id=? WHERE id IN (${placeholders(ids.length)}) AND ${CLAIMABLE} AND EXISTS (SELECT 1 FROM messages WHERE id=?)`)
+    .bind(messageId, ...ids, app, user_ref ?? "", messageId);
+}
+
+/** Deletes the images a condition selects, objects before rows: an object delete that fails
+ *  leaves its row, so the next run retries it and no object outlives its record. */
+export async function deleteImagesWhere(env: Env, where: string, binds: unknown[]): Promise<number> {
+  let deleted = 0;
+  for (;;) {
+    const rows = (await env.DB.prepare(`SELECT id, r2_key FROM images WHERE ${where} LIMIT ${D1_MAX_PARAMS}`).bind(...binds).all<{ id: string; r2_key: string }>()).results;
+    if (!rows.length) return deleted;
+    await env.IMAGES.delete(rows.map((r) => r.r2_key));
+    await env.DB.prepare(`DELETE FROM images WHERE id IN (${placeholders(rows.length)})`).bind(...rows.map((r) => r.id)).run();
+    deleted += rows.length;
+    if (rows.length < D1_MAX_PARAMS) return deleted;
   }
 }
 
 export async function purgeUnclaimedImages(env: Env, now: string): Promise<number> {
-  const cutoff = addMinutes(now, -CLAIM_WINDOW_MIN);
-  const rows = (await env.DB.prepare("SELECT id, r2_key FROM images WHERE message_id IS NULL AND created_at < ?").bind(cutoff).all<{ id: string; r2_key: string }>()).results;
-  if (!rows.length) return 0;
-  await deleteImageObjects(env, rows.map((r) => r.r2_key));
-  await env.DB.prepare(`DELETE FROM images WHERE id IN (${rows.map(() => "?").join(",")})`).bind(...rows.map((r) => r.id)).run();
-  return rows.length;
-}
-
-export async function deleteImageObjects(env: Env, keys: string[]): Promise<void> {
-  await Promise.all(keys.map((k) => env.IMAGES.delete(k)));
+  return deleteImagesWhere(env, "message_id IS NULL AND created_at < ?", [addMinutes(now, -CLAIM_WINDOW_MIN)]);
 }

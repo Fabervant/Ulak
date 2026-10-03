@@ -5,7 +5,7 @@ import { insertMessage, getMessage } from "../src/core/messages";
 import { addReply } from "../src/core/replies";
 import { runScheduled } from "../src/core/retention";
 import { addMinutes } from "../src/core/time";
-import { submission } from "./helpers";
+import { submission, withD1ParamLimit, seedMessages } from "./helpers";
 
 const DAY = 24 * 60;
 const NOW = "2026-06-01T00:00:00.000Z";
@@ -30,6 +30,17 @@ describe("runScheduled: retention", () => {
     expect(await getMessage(env.DB, old.id)).not.toBeNull();
     expect(await getMessage(env.DB, fresh.id)).not.toBeNull();
     expect((await env.DB.prepare("SELECT COUNT(*) n FROM replies").first<{ n: number }>())!.n).toBe(1);
+  });
+  it("expires more messages in one run than one statement may bind, with every image they carry", async () => {
+    await createApp(env.DB, "demo");
+    const ids = await seedMessages(150, addMinutes(NOW, -91 * DAY));
+    await env.DB.prepare("INSERT INTO images (id,app,message_id,user_ref,r2_key,content_type,bytes,width,height,created_at) VALUES ('i1','demo',?,NULL,'img/demo/i1','image/png',1,1,1,?)").bind(ids[149], NOW).run();
+    await env.IMAGES.put("img/demo/i1", "x");
+    const r = await runScheduled({ ...env, DB: withD1ParamLimit(env.DB) }, NOW);
+    expect(r.expired).toBe(150);
+    expect((await env.DB.prepare("SELECT COUNT(*) n FROM messages").first<{ n: number }>())!.n).toBe(0);
+    expect((await env.DB.prepare("SELECT COUNT(*) n FROM images").first<{ n: number }>())!.n).toBe(0);
+    expect(await env.IMAGES.get("img/demo/i1")).toBeNull();
   });
   it("honours a shorter per-app retention", async () => {
     await createApp(env.DB, "demo");

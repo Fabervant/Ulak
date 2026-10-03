@@ -17,7 +17,7 @@ import { channelFromEnv } from "../core/notify/notifier";
 import { validateNotice, reserveNotice, releaseNotice, noticeWaitSec } from "../core/notices";
 import { cors } from "./cors";
 import { runScheduled } from "../core/retention";
-import { uploadImage, codecFromEnv, claimImages, countClaimable, MAX_IMAGE_BYTES } from "../core/images";
+import { uploadImage, imageCodecFor, imageTooLarge, MAX_IMAGE_BYTES } from "../core/images";
 
 type Ctx = { Bindings: Env; Variables: AppVars };
 export const app = new Hono<Ctx>();
@@ -98,17 +98,12 @@ app.post("/v1/messages", async (c) => {
   if (p.user_ref) limiters.unshift({ limiter: limiterFor(c.env.RL_SUBMIT_USER, memSubmitUser), key: `u:${tenant.id}:${p.user_ref}` });
   await enforce(limiters, 60); // 429 burst
 
-  if (p.attachments.length && (await countClaimable(c.env.DB, tenant.id, p.user_ref, p.attachments)) !== p.attachments.length) {
-    throw new ApiError(400, "invalid_request", "an attachment id is unknown, already used, or not yours", false, { field: "attachments" });
-  }
-
-  // The per-user ceilings are enforced by the insert itself, in one atomic statement, because
-  // the binding limiter above is approximate and a separate count races under parallel submits.
+  // The per-user ceilings and the attachment claim are enforced by the insert itself, atomically,
+  // because the binding limiter above is approximate and a separate check races under parallel submits.
   const t = nowIso();
   const windows = { sinceBurstIso: addMinutes(t, -1), burstLimit: SUBMIT_BURST_LIMIT, sinceHourIso: addMinutes(t, -60), hourLimit: SUBMIT_HOURLY_LIMIT };
   const statusOnReceipt = statusList(c.env)[0] ?? "pending";
   const { row, created } = await insertMessage(c.env.DB, p, statusOnReceipt, windows);
-  if (created && p.attachments.length) await claimImages(c.env.DB, tenant.id, p.user_ref, row.id, p.attachments);
   if (created) c.executionCtx.waitUntil(notifyMessage(c.env, row));
   return c.json({ id: row.id, received_at: row.received_at }, created ? 201 : 200);
 });
@@ -143,20 +138,16 @@ app.post("/v1/notify", async (c) => {
   return c.json({ id }, 201);
 });
 
-const imageTooLarge = () => new ApiError(413, "payload_too_large", `image exceeds ${MAX_IMAGE_BYTES} bytes`, false, { max_bytes: MAX_IMAGE_BYTES });
-
 app.post("/v1/images", requireAppKey(), async (c) => {
   const tenant = c.get("app");
-  if (!tenant.images_enabled) throw new ApiError(403, "images_disabled", "this app does not accept images", false);
+  const codec = imageCodecFor(c.env, tenant); // 403
   if (Number(c.req.header("content-length") ?? "0") > MAX_IMAGE_BYTES) throw imageTooLarge();
   const user_ref = c.req.header("x-ulak-user-ref") ?? null;
   if (user_ref !== null && (user_ref.length < 16 || user_ref.length > 128)) {
     throw new ApiError(400, "invalid_request", "x-ulak-user-ref must be 16 to 128 characters", false, { field: "user_ref" });
   }
   await enforce([{ limiter: limiterFor(c.env.RL_UPLOAD_USER, memUploadUser), key: `up:${tenant.id}:${user_ref ?? clientIp(c.req.raw, c.env)}` }], 60);
-  const bytes = await c.req.raw.arrayBuffer();
-  if (bytes.byteLength > MAX_IMAGE_BYTES) throw imageTooLarge();
-  const { id } = await uploadImage(c.env, codecFromEnv(c.env), tenant, user_ref, bytes);
+  const { id } = await uploadImage(c.env, codec, tenant, user_ref, await c.req.raw.arrayBuffer());
   return c.json({ id }, 201);
 });
 
@@ -195,8 +186,7 @@ app.get("/v1/messages", requireAppKey(), async (c) => {
 app.delete("/v1/messages", requireAppKey(), async (c) => {
   const tenant = c.get("app");
   const user_ref = userRefParam(c.req.query("user_ref"));
-  const { deleted_messages, image_keys } = await deleteUser(c.env.DB, tenant.id, user_ref);
-  c.executionCtx.waitUntil(Promise.all(image_keys.map((k) => c.env.IMAGES.delete(k))));
+  const { deleted_messages } = await deleteUser(c.env, tenant.id, user_ref);
   return c.json({ deleted_messages });
 });
 

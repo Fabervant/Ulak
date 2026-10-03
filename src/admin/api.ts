@@ -5,7 +5,8 @@ import { ApiError } from "../core/errors";
 import { requireAdminToken, type AdminTokenVars } from "../core/auth/admintoken";
 import { listAdmin, getMessage, setStatus, deleteUser, type MessageRow } from "../core/messages";
 import { addReply, listReplies, listRepliesFor } from "../core/replies";
-import { listImagesFor, deleteImageObjects } from "../core/images";
+import { listImagesFor } from "../core/images";
+import { placeholders, slices } from "../core/sql";
 import { signImageUrl } from "../core/signedurl";
 import { runChecks } from "../core/checks";
 import { listApps } from "../core/apps";
@@ -38,10 +39,9 @@ api.get("/messages", async (c) => {
   });
   const replies = await listRepliesFor(c.env.DB, rows.map((r) => r.id));
   const counts = new Map<string, number>();
-  if (rows.length) {
-    const ph = rows.map(() => "?").join(",");
-    const q = await c.env.DB.prepare(`SELECT message_id, COUNT(*) n FROM images WHERE message_id IN (${ph}) GROUP BY message_id`)
-      .bind(...rows.map((r) => r.id))
+  for (const ids of slices(rows.map((r) => r.id))) {
+    const q = await c.env.DB.prepare(`SELECT message_id, COUNT(*) n FROM images WHERE message_id IN (${placeholders(ids.length)}) GROUP BY message_id`)
+      .bind(...ids)
       .all<{ message_id: string; n: number }>();
     for (const r of q.results) counts.set(r.message_id, r.n);
   }
@@ -106,8 +106,7 @@ api.delete("/users", async (c) => {
   const app = c.req.query("app") ?? "";
   const user_ref = c.req.query("user_ref") ?? "";
   if (!app || user_ref.length < 16) throw new ApiError(400, "invalid_request", "app and user_ref are required", false, { field: "user_ref" });
-  const { deleted_messages, image_keys } = await deleteUser(c.env.DB, app, user_ref);
-  c.executionCtx.waitUntil(deleteImageObjects(c.env, image_keys));
+  const { deleted_messages } = await deleteUser(c.env, app, user_ref);
   return c.json({ deleted_messages });
 });
 

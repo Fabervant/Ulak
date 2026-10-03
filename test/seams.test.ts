@@ -6,7 +6,9 @@
 import { env, createExecutionContext } from "cloudflare:test";
 import { describe, it, expect, beforeEach } from "vitest";
 import imagesWorker from "../src/images/index";
-import { BindingCodec, PassthroughCodec, codecFromEnv, getImage, deleteImageObjects } from "../src/core/images";
+import { BindingCodec, imageCodecFor, getImage, deleteImagesWhere } from "../src/core/images";
+import { getApp } from "../src/core/apps";
+import worker from "../src/api/index";
 import { BindingRateLimiter, MemoryRateLimiter, limiterFor } from "../src/core/ratelimit";
 import { defaultFetch } from "../src/core/http";
 import { createAdminToken } from "../src/core/auth/admintoken";
@@ -33,9 +35,9 @@ beforeEach(async () => {
 const upload = (bytes: Uint8Array, ct: string) => uploadImage(key, bytes, ct, U);
 
 // ── Seam 1: the image codec ─────────────────────────────────────────────────────────────────
-// codecFromEnv returns BindingCodec when the Images binding is present and PassthroughCodec
-// when it is not. The test config binds the image service, so the whole suite runs the
-// production branch.
+// imageCodecFor returns BindingCodec when the Images binding is present and refuses the upload
+// when it is not; there is no second codec. The test config binds the image service, so the
+// whole suite runs the production branch.
 //
 // Caveat, stated in docs/seam-audit.md too: the local image service is backed by libvips, not
 // by the codec Cloudflare runs in production. This proves our side of the seam - the branch
@@ -45,9 +47,25 @@ describe("seam: image codec", () => {
   const throwing = (extra: object) =>
     ({ info: async () => { throw Object.assign(new Error("service said no"), extra); } }) as unknown as ImagesBinding;
 
-  it("codecFromEnv takes the production branch whenever the binding exists", () => {
-    expect(codecFromEnv(env)).toBeInstanceOf(BindingCodec);
-    expect(codecFromEnv({ ...env, IMG: undefined })).toBeInstanceOf(PassthroughCodec);
+  it("imageCodecFor takes the production branch whenever the binding exists", async () => {
+    expect(imageCodecFor(env, (await getApp(env.DB, "demo"))!)).toBeInstanceOf(BindingCodec);
+  });
+
+  it("an instance without the image service refuses uploads instead of storing bytes nobody re-encoded", async () => {
+    // The spec's promise is that the client's bytes are never stored. A fallback that kept them
+    // when the service was missing broke it, so the answer is one a client already handles.
+    const res = await worker.fetch(
+      new Request("https://api.example.invalid/v1/images", {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "image/png", "x-ulak-user-ref": U, "cf-connecting-ip": "203.0.113.9" },
+        body: png,
+      }),
+      { ...env, IMG: undefined },
+      createExecutionContext(),
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ error: "images_disabled", retryable: false });
+    expect((await env.IMAGES.list()).objects).toHaveLength(0);
   });
 
   it("BindingCodec.info reads real dimensions from PNG and JPEG through the binding", async () => {
@@ -58,8 +76,7 @@ describe("seam: image codec", () => {
 
   it("BindingCodec.info answers 415 on a vector, which the binding decodes but Ulak cannot store", async () => {
     // The binding reads the SVG and answers without a width. That branch is the only thing
-    // between a script-bearing vector and the bucket, and the passthrough codec can never
-    // reach it, because it reads the header itself and never asks a service.
+    // between a script-bearing vector and the bucket.
     await expect(new BindingCodec(env.IMG!).info(buf(decodableSvg))).rejects.toMatchObject({ status: 415, code: "unsupported_media_type" });
   });
 
@@ -172,11 +189,12 @@ describe("seam: signed-URL builder across the two Workers", () => {
 // the database can disagree - a delete over a key the store no longer holds, and whether the
 // bucket ends up holding anything Ulak did not record.
 describe("seam: object-store access", () => {
-  it("deleteImageObjects tolerates a key the store no longer holds, so purge finishes", async () => {
+  it("image deletion tolerates a key the store no longer holds, so purge finishes and the row goes", async () => {
     const { id } = await (await upload(png, "image/png")).json<{ id: string }>();
     const row = (await getImage(env.DB, id))!;
     await env.IMAGES.delete(row.r2_key); // the store lost it; the row still names it
-    await expect(deleteImageObjects(env, [row.r2_key, `img/demo/${crypto.randomUUID()}`])).resolves.toBeUndefined();
+    expect(await deleteImagesWhere(env, "id=?", [id])).toBe(1);
+    expect(await getImage(env.DB, id)).toBeNull();
   });
 
   it("the bucket holds exactly the keys the database recorded, under the app-scoped prefix", async () => {

@@ -15,7 +15,7 @@ import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
 import { listApps, createApp, updateApp, rotateKey, rotateNoticeKey } from "../core/apps";
-import { listImagesFor, deleteImageObjects } from "../core/images";
+import { listImagesFor } from "../core/images";
 import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/auth/admintoken";
 import { api, imageLinks } from "./api";
 import { runChecks } from "../core/checks";
@@ -146,8 +146,7 @@ app.post("/m/:id/delete-user", async (c) => {
   await readForm(c);
   const m = await getMessage(c.env.DB, c.req.param("id"));
   if (!m || !m.user_ref) return c.text("not found or anonymous", 404);
-  const { image_keys } = await deleteUser(c.env.DB, m.app, m.user_ref);
-  c.executionCtx.waitUntil(deleteImageObjects(c.env, image_keys));
+  await deleteUser(c.env, m.app, m.user_ref);
   return c.redirect(`/?app=${m.app}`, 303);
 });
 
