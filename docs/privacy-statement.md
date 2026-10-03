@@ -26,12 +26,15 @@ service stores:
   location survives;
 - the time the message arrived, and any replies and status changes made by the operator.
 
-Nothing else. The service has no accounts, no tracking, and no analytics.
+Nothing else is stored. To limit abuse, the address your request comes from is counted by
+Cloudflare for about a minute; it is not stored. The service has no accounts, no tracking, and no
+analytics.
 
 ## Why
 
-Only to read and answer your message. Messages are read by the operator and by assistant tooling
-the operator runs to draft replies; a person approves every reply before it is sent.
+Only to read and answer your message. The operator uses an AI assistant, Claude by Anthropic
+(United States), to draft replies; the message text is sent to it for that purpose, and a person
+approves every reply before it is sent.
 
 ## For how long
 
@@ -46,8 +49,10 @@ everything tied to your reference.
 
 ## Where
 
-The service runs on Cloudflare's infrastructure. Notifications of new messages are delivered to
-the operator through Telegram; the notification contains the message text and the app name.
+The service runs on Cloudflare's infrastructure, and messages and images are stored in
+{{STORAGE_REGION}}. Notifications of new messages are delivered to the operator through Telegram,
+a provider outside {{CONTROLLER_COUNTRY}}; the notification contains the message text, the app's
+name, version and platform, the device language, and the last error the app recorded.
 
 ## Not done
 

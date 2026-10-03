@@ -194,3 +194,11 @@ npm run deploy:api && npm run deploy:admin && npm run deploy:images
 `docs/privacy-statement.md` is a template. Fill in the placeholders and publish it wherever your
 apps' privacy policies live. Each consuming app should name your Ulak instance as a recipient of
 support messages and state the retention period you configured.
+
+`{{STORAGE_REGION}}` is where your database and bucket run: read `running_in_region` from
+`wrangler d1 info <database>` and `location` from `wrangler r2 bucket info <bucket>`, and name the
+region in words (for example `WEUR` is Western Europe). `{{CONTROLLER_COUNTRY}}` is the country the
+controller is in.
+
+Owner notices (`POST /v1/notify`) reach the operator on the same Telegram chat. Apps must not put
+end-user data in operator notices.
