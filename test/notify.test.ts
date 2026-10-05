@@ -14,16 +14,17 @@ const seed = async () => {
 };
 
 describe("buildNotification", () => {
-  it("carries app, version, platform, locale, text and an admin link, unmangled", async () => {
-    const row = await seed();
-    const n = buildNotification(row, "https://admin.example.invalid");
-    expect(n.text).toContain("demo 2.1 ios tr-TR");
-    expect(n.text).toContain("ğüşıöç");
+  // Telegram is outside the controller's country: the notice says that something arrived and
+  // where to read it, and carries nothing the user wrote or the device reported.
+  it("carries only the app, the platform and an admin link", async () => {
+    const row = { ...(await seed()), last_error: "TypeError at checkout" };
+    const n = buildNotification(row, "https://admin.example.invalid/");
+    expect(n.text).toBe("[demo] new message (ios)");
     expect(n.adminLink).toBe(`https://admin.example.invalid/m/${row.id}`);
   });
-  it("truncates long text", async () => {
-    const row = { ...(await seed()), message: "x".repeat(5000) };
-    expect(buildNotification(row, "https://a").text.length).toBeLessThan(1200);
+  it("names a crash report without a message as one", async () => {
+    const row = { ...(await seed()), message: "" };
+    expect(buildNotification(row, "https://a").text).toBe("[demo] new crash report (ios)");
   });
 });
 

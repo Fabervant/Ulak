@@ -17,11 +17,8 @@ export class NoopNotifier implements Notifier {
 }
 
 export function buildNotification(row: MessageRow, adminUrl: string): Notification {
-  const head = `[${row.app}] ${row.app} ${row.app_version} ${row.platform} ${row.locale ?? "-"}`;
-  const body = row.message.length ? row.message : "(crash report, no message)";
-  const err = row.last_error ? `\nerror: ${row.last_error.slice(0, 200)}` : "";
-  const text = `${head}\n${body.slice(0, 800)}${body.length > 800 ? "…" : ""}${err}`;
-  return { text, adminLink: `${adminUrl.replace(/\/$/, "")}/m/${row.id}` };
+  const kind = row.message.length ? "message" : "crash report";
+  return { text: `[${row.app}] new ${kind} (${row.platform})`, adminLink: `${adminUrl.replace(/\/$/, "")}/m/${row.id}` };
 }
 
 /** The channel that reaches the operator, or null when this instance has none that can send. */

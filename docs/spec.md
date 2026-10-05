@@ -238,8 +238,9 @@ Mandatory handling, all tested:
 The message is written and the response returned before any notification is attempted. The
 notification attempt is recorded on the message row: `notified_at`, `notify_error`,
 `notify_attempts`. The notifier is an interface with a Telegram adapter; the messenger is a
-configuration value. The ping carries the message text (truncated), `app`, `app_version`,
-`platform`, `locale`, and a link into the admin surface.
+configuration value. The ping carries only `app`, `platform`, whether it is a message or a crash
+report, and a link into the admin surface; the operator reads the content there. Nothing the
+user wrote or the device reported leaves through the messenger.
 
 The scheduled job retries unnotified messages up to 5 attempts.
 

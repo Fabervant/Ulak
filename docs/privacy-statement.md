@@ -51,8 +51,10 @@ everything tied to your reference.
 
 The service runs on Cloudflare's infrastructure, and messages and images are stored in
 {{STORAGE_REGION}}. Notifications of new messages are delivered to the operator through Telegram,
-a provider outside {{CONTROLLER_COUNTRY}}; the notification contains the message text, the app's
-name, version and platform, the device language, and the last error the app recorded.
+a provider outside {{CONTROLLER_COUNTRY}}; each notification contains only the app's name, the
+platform (such as iOS or Android), whether it is a message or a crash report, and a link with a
+random identifier that opens the message in {{CONTROLLER_NAME}}'s admin panel, which only the
+operator can sign in to. It contains nothing you wrote.
 
 ## Not done
 
