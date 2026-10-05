@@ -188,6 +188,7 @@ describe("admin surface", () => {
     const row = (id: string) =>
       env.DB.prepare("SELECT retention_days, images_enabled, notify_enabled, allowed_origins FROM apps WHERE id=?").bind(id).first<{ retention_days: number; images_enabled: number; notify_enabled: number; allowed_origins: string }>();
     expect((await row("plain"))!.retention_days).toBe(90);
+    expect((await row("newapp"))!.retention_days).toBe(30);
     const updated = await form("/apps/newapp", { retention_days: "45", images_enabled: "on", notify_enabled: "on", allowed_origins: " https://a.example , https://b.example " });
     expect(updated.status).toBe(303);
     expect(updated.headers.get("location")).toBe("/apps");

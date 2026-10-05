@@ -126,6 +126,9 @@ describe("image origin", () => {
     expect(served).toEqual(stored);
     expect(sniffImageType(served)).toBe("image/png");
     expect((await imagesWorker.fetch(new Request(url.replace(/sig=[0-9a-f]+/, "sig=00")), e, createExecutionContext())).status).toBe(403);
+    // Full length, last character changed: the whole signature is compared, not a prefix.
+    const tampered = url.replace(/[0-9a-f]$/, (ch) => (ch === "0" ? "1" : "0"));
+    expect((await imagesWorker.fetch(new Request(tampered), e, createExecutionContext())).status).toBe(403);
     const expired = await signImageUrl(secret, "https://images.example.invalid", id, Math.floor(Date.now() / 1000) - 1);
     expect((await imagesWorker.fetch(new Request(expired), e, createExecutionContext())).status).toBe(403);
   });
