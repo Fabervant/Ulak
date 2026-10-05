@@ -40,15 +40,15 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 
 // One signing key for the file: jose caches the key set it fetched, so a second key under the
 // same id would be checked against the first.
 const googleKey = generateKeyPair("RS256");
-/** Programs Google to accept the next code exchange as "sub-1" with this nonce. */
-async function googleSignsIn(nonce: string) {
+/** Programs Google to accept the next code exchange as `sub` (the pinned admin by default) with this nonce. */
+async function googleSignsIn(nonce: string, sub = "sub-1", email = "a@example.invalid") {
   const { publicKey, privateKey } = await googleKey;
   const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "RS256", use: "sig" };
-  const idToken = await new SignJWT({ email: "a@example.invalid", email_verified: true, nonce })
+  const idToken = await new SignJWT({ email, email_verified: true, nonce })
     .setProtectedHeader({ alg: "RS256", kid: "k1" })
     .setIssuer("https://accounts.google.com")
     .setAudience(E.GOOGLE_CLIENT_ID ?? "")
-    .setSubject("sub-1")
+    .setSubject(sub)
     .setIssuedAt()
     .setExpirationTime("5m")
     .sign(privateKey);
@@ -92,6 +92,19 @@ describe("admin surface", () => {
     expect(html).toContain("ışğİ");
     expect(html).toContain('class="badge pending">1<');
   });
+  it("the list filters by app and by status", async () => {
+    await createApp(env.DB, "other");
+    await insertMessage(env.DB, mk({ message: "alpha" }), "pending");
+    await insertMessage(env.DB, mk({ message: "beta" }), "completed");
+    await insertMessage(env.DB, mk({ app: "other", message: "gamma" }), "pending");
+    const shown = async (query: string) => {
+      const html = await (await req(`/?${query}`)).text();
+      return ["alpha", "beta", "gamma"].filter((w) => html.includes(w));
+    };
+    expect(await shown("app=other")).toEqual(["gamma"]);
+    expect(await shown("status=completed")).toEqual(["beta"]);
+    expect(await shown("app=demo&status=pending")).toEqual(["alpha"]);
+  });
   it("sends the full set of protective headers: no scripts, no framing, no foreign form targets", async () => {
     const res = await req("/");
     expect(res.headers.get("content-security-policy")).toBe(
@@ -108,25 +121,60 @@ describe("admin surface", () => {
     expect(html).not.toContain("<img src=x");
     expect((await req(`/m/${crypto.randomUUID()}`)).status).toBe(404);
   });
-  it("reply and status update the row; an unknown status is refused", async () => {
+  it("a message with an image opens without download links when the image secret is unset", async () => {
+    await updateApp(env.DB, "demo", { images_enabled: true });
+    const { messageId } = await imageOnMessage(key, hex());
+    expect(await (await req(`/m/${messageId}`)).text()).toContain("download image 1");
+    const res = await req(`/m/${messageId}`, {}, cookie, { ...E, IMAGE_URL_SECRET: undefined });
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("download image");
+  });
+  it("reply and status update the row and return to it; an unknown status or an oversized reply is refused", async () => {
     const m = (await insertMessage(env.DB, mk(), "pending")).row;
-    expect((await form(`/m/${m.id}/reply`, { content: "Merhaba, düzeltiyoruz." })).status).toBe(303);
+    const replied = await form(`/m/${m.id}/reply`, { content: "Merhaba, düzeltiyoruz." });
+    expect(replied.status).toBe(303);
+    expect(replied.headers.get("location")).toBe(`/m/${m.id}`);
     expect((await listReplies(env.DB, m.id))[0]!.content).toBe("Merhaba, düzeltiyoruz.");
-    expect((await form(`/m/${m.id}/status`, { status: "in_progress" })).status).toBe(303);
+    const set = await form(`/m/${m.id}/status`, { status: "in_progress" });
+    expect(set.status).toBe(303);
+    expect(set.headers.get("location")).toBe(`/m/${m.id}`);
     expect((await getMessage(env.DB, m.id))!.status).toBe("in_progress");
     expect((await form(`/m/${m.id}/status`, { status: "bogus" })).status).toBe(400);
+    expect((await form(`/m/${m.id}/reply`, { content: "x".repeat(8001) })).status).toBe(400);
   });
-  it("rejects a form without the right csrf", async () => {
+  it("an unknown message is 404 to every message form; an anonymous sender cannot be deleted by reference", async () => {
+    const ghost = crypto.randomUUID();
+    for (const [path, fields] of [[`/m/${ghost}/reply`, { content: "x" }], [`/m/${ghost}/status`, { status: "viewed" }], [`/m/${ghost}/delete-user`, {}]] as const) {
+      expect((await form(path, fields)).status, path).toBe(404);
+    }
+    const anon = (await insertMessage(env.DB, mk({ user_ref: null }), "pending")).row;
+    expect((await form(`/m/${anon.id}/delete-user`, {})).status).toBe(404);
+    expect(await getMessage(env.DB, anon.id)).not.toBeNull();
+  });
+  // A forged cross-site post must not rotate a live client's key, delete a user's data or sign
+  // the operator out, so every form the panel accepts is refused without the session's csrf.
+  it("every form post without the right csrf is refused and changes nothing", async () => {
     const m = (await insertMessage(env.DB, mk(), "pending")).row;
-    const res = await req(`/m/${m.id}/status`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "csrf=wrong&status=viewed" });
-    expect(res.status).toBe(403);
-    expect((await getMessage(env.DB, m.id))!.status).toBe("pending");
+    const { id: tokenId } = await createAdminToken(env.DB, "laptop");
+    const state = async () =>
+      JSON.stringify(await Promise.all(["apps", "admins", "admin_tokens", "messages", "replies"].map(async (t) => (await env.DB.prepare(`SELECT * FROM ${t}`).all()).results)));
+    const before = await state();
+    const posts = ["/auth/logout", "/auth/logout-all", `/m/${m.id}/reply`, `/m/${m.id}/status`, `/m/${m.id}/delete-user`, "/apps", "/apps/demo", "/apps/demo/rotate", "/apps/demo/notice-key", "/tokens", `/tokens/${tokenId}/revoke`];
+    for (const path of posts) {
+      const body = "csrf=wrong&content=x&status=viewed&id=forged&name=forged&retention_days=1";
+      const res = await req(path, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
+      expect(res.status, path).toBe(403);
+      expect(res.headers.getSetCookie(), path).toHaveLength(0);
+    }
+    expect(await state()).toBe(before);
   });
   it("delete-user removes the sender's messages and their stored images", async () => {
     await updateApp(env.DB, "demo", { images_enabled: true });
     const { imageId, messageId } = await imageOnMessage(key, hex());
     const r2Key = (await getImage(env.DB, imageId))!.r2_key;
-    expect((await form(`/m/${messageId}/delete-user`, {})).status).toBe(303);
+    const res = await form(`/m/${messageId}/delete-user`, {});
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/?app=demo");
     expect(await getMessage(env.DB, messageId)).toBeNull();
     expect(await getImage(env.DB, imageId)).toBeNull();
     expect(await env.IMAGES.get(r2Key)).toBeNull();
@@ -136,11 +184,36 @@ describe("admin surface", () => {
     expect(created.status).toBe(200);
     expect(await created.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
     expect((await form("/apps", { id: "Bad Id", retention_days: "30" })).status).toBe(400);
-    expect((await form("/apps/newapp", { retention_days: "45", images_enabled: "on", notify_enabled: "on", allowed_origins: "https://a.example" })).status).toBe(303);
-    const row = await env.DB.prepare("SELECT retention_days, images_enabled, notify_enabled, allowed_origins FROM apps WHERE id='newapp'").first<{ retention_days: number; images_enabled: number; notify_enabled: number; allowed_origins: string }>();
-    expect(row).toEqual({ retention_days: 45, images_enabled: 1, notify_enabled: 1, allowed_origins: '["https://a.example"]' });
+    expect((await form("/apps", { id: "plain" })).status).toBe(200);
+    const row = (id: string) =>
+      env.DB.prepare("SELECT retention_days, images_enabled, notify_enabled, allowed_origins FROM apps WHERE id=?").bind(id).first<{ retention_days: number; images_enabled: number; notify_enabled: number; allowed_origins: string }>();
+    expect((await row("plain"))!.retention_days).toBe(90);
+    const updated = await form("/apps/newapp", { retention_days: "45", images_enabled: "on", notify_enabled: "on", allowed_origins: " https://a.example , https://b.example " });
+    expect(updated.status).toBe(303);
+    expect(updated.headers.get("location")).toBe("/apps");
+    expect(await row("newapp")).toEqual({ retention_days: 45, images_enabled: 1, notify_enabled: 1, allowed_origins: '["https://a.example","https://b.example"]' });
+    // An app served only through its own server has no origins; the empty field must save.
+    expect((await form("/apps/newapp", { retention_days: "45", allowed_origins: "" })).status).toBe(303);
+    expect((await row("newapp"))!.allowed_origins).toBe("[]");
     const rotated = await form("/apps/newapp/rotate", {});
     expect(await rotated.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
+  });
+  // The operator sees why a form was refused: a typed refusal from core, never a bare 500.
+  it("every refused apps or tokens form answers its status with the reason", async () => {
+    const refusals: [string, Record<string, string>, number, string][] = [
+      ["/apps/ghost", { retention_days: "30" }, 404, "app ghost not found"],
+      ["/apps/ghost/rotate", {}, 404, "app ghost not found"],
+      ["/apps/ghost/notice-key", {}, 404, "app ghost not found"],
+      ["/apps/demo", { retention_days: "0" }, 400, "retention_days must be 1 to 3650"],
+      ["/apps/demo", { retention_days: "30", allowed_origins: "javascript:alert(1)" }, 400, "bad origin javascript:alert(1)"],
+      ["/apps", { id: "demo" }, 400, "app demo already exists"],
+      ["/tokens", { name: " " }, 400, "token name required"],
+    ];
+    for (const [path, fields, status, reason] of refusals) {
+      const res = await form(path, fields);
+      expect(res.status, path).toBe(status);
+      expect(await res.text(), path).toBe(reason);
+    }
   });
   it("the apps page issues a notice key, shown once and marked as server-only, and then says one exists", async () => {
     expect(await (await req("/apps")).text()).toContain("no notice key");
@@ -187,15 +260,6 @@ describe("without a session secret the panel fails closed", () => {
 // cache, and the browser's own form-autofill memory. Sign-out has to empty all of them, and the
 // sign-in that consumed the OAuth state must not leave that state lying around either.
 describe("sign-out leaves the browser a stranger", () => {
-  it("sign-out expires the session cookie and the OAuth state cookie on their own paths", async () => {
-    const res = await form("/auth/logout", {});
-    expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/auth/login");
-    expect(cleared(res, "ulak_admin", "/")).toBeDefined();
-    expect(cleared(res, "ulak_oauth", "/auth")).toBeDefined();
-    expect(res.headers.getSetCookie()).toHaveLength(2);
-  });
-
   it("every response is no-store, so nothing the admin saw sits in the HTTP cache", async () => {
     for (const path of ["/", "/apps", "/tokens", "/auth/login"]) {
       const res = await req(path);
@@ -226,6 +290,13 @@ describe("sign-out leaves the browser a stranger", () => {
     const mismatch = await callback("s0", "n0", "forged");
     expect(mismatch.status).toBe(400);
     expect(mismatch.headers.getSetCookie()).toHaveLength(0);
+    // A state cookie without its nonce would let a token without one through; no code has nothing to exchange.
+    const noNonce = await req("/auth/callback?state=s0&code=c1", { headers: { cookie: "ulak_oauth=s0" } }, null);
+    const noCode = await req("/auth/callback?state=s0", { headers: { cookie: "ulak_oauth=s0.n0" } }, null);
+    for (const res of [noNonce, noCode]) {
+      expect(res.status).toBe(400);
+      expect(res.headers.getSetCookie()).toHaveLength(0);
+    }
     expect(outbound).not.toHaveBeenCalled();
 
     // The exchange fails after the state matched: the state is spent and the cookie goes with it.
@@ -243,6 +314,21 @@ describe("sign-out leaves the browser a stranger", () => {
     expect(await readSession("s3", sessionValue(sessionSet(ok)!))).toMatchObject({ sub: "sub-1" });
     expect(outbound).toHaveBeenCalledTimes(2);
     expect(outbound.mock.calls[1]![0]).toBe("https://oauth2.googleapis.com/token");
+    // Google refuses the exchange unless it names the address the sign-in was sent back to.
+    const sentBackTo = new URL((await req("/auth/login", {}, null)).headers.get("location")!).searchParams.get("redirect_uri");
+    expect(sentBackTo).toBe(`${E.ADMIN_URL}/auth/callback`);
+    expect((outbound.mock.calls[1]![1]!.body as URLSearchParams).get("redirect_uri")).toBe(sentBackTo);
+  });
+
+  it("a Google account that is not an admin is refused with a logged 403 and gets no session", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await googleSignsIn("n1", "sub-2", "b@example.invalid");
+    const res = await callback("s1", "n1");
+    expect(res.status).toBe(403);
+    expect(sessionSet(res)).toBeUndefined();
+    expect(cleared(res, "ulak_oauth", "/auth")).toBeDefined();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("not_an_admin"));
+    warn.mockRestore();
   });
 });
 

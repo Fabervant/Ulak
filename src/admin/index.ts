@@ -20,6 +20,7 @@ import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/aut
 import { api, imageLinks } from "./api";
 import { runChecks } from "../core/checks";
 import { nowSec } from "../core/time";
+import { sha256Hex, timingSafeEqual } from "../core/ids";
 
 type Ctx = { Bindings: Env; Variables: AdminVars };
 const app = new Hono<Ctx>();
@@ -35,8 +36,10 @@ app.use("*", async (c, next) => {
 
 app.onError((err, c) => {
   if (err instanceof CsrfError) return c.text("forbidden: bad csrf token", 403);
-  if (err instanceof ApiError) return c.text(err.detail, err.status as 400);
-  if (err instanceof Error && /must|exists|not found|bad origin|required/.test(err.message)) return c.text(err.message, 400);
+  if (err instanceof ApiError) {
+    if (err.status === 403) console.warn(`admin auth failed: ${err.code} path=${c.req.path}`);
+    return c.text(err.detail, err.status as 400);
+  }
   console.error("admin unhandled", err);
   return c.text("internal error", 500);
 });
@@ -54,21 +57,21 @@ app.route("/api", api);
 app.get("/status/:secret", async (c) => {
   const expected = c.env.STATUS_SECRET;
   if (!expected) return c.notFound();
-  const digest = async (v: string) => new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)));
-  const [a, b] = await Promise.all([digest(c.req.param("secret")), digest(expected)]);
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a[i]! ^ b[i]!;
-  if (diff !== 0) return c.notFound();
+  const [a, b] = await Promise.all([sha256Hex(c.req.param("secret")), sha256Hex(expected)]);
+  if (!timingSafeEqual(a, b)) return c.notFound();
   const { ok } = await runChecks(c.env.DB);
   return c.json({ ok }, ok ? 200 : 503);
 });
 
 // --- sign-in ---
+// Google refuses the code exchange unless it names the same address the sign-in was sent from.
+const callbackUrl = (env: Env) => `${env.ADMIN_URL}/auth/callback`;
+
 app.get("/auth/login", (c) => {
   const state = crypto.randomUUID();
   const nonce = crypto.randomUUID();
   c.header("set-cookie", oauthCookie(state, nonce));
-  return c.redirect(authUrl(c.env, state, nonce, `${c.env.ADMIN_URL}/auth/callback`), 302);
+  return c.redirect(authUrl(c.env, state, nonce, callbackUrl(c.env)), 302);
 });
 
 app.get("/auth/callback", async (c) => {
@@ -77,7 +80,7 @@ app.get("/auth/callback", async (c) => {
   if (!state || !nonce || c.req.query("state") !== state || !code) return c.text("sign-in state mismatch; start again at /auth/login", 400);
   // The state matched, so it is spent whatever happens next; the header survives an error response.
   c.header("set-cookie", clearOauthCookie());
-  const { id_token } = await exchangeCode(c.env, code, `${c.env.ADMIN_URL}/auth/callback`);
+  const { id_token } = await exchangeCode(c.env, code, callbackUrl(c.env));
   const who = await verifyIdToken(c.env, id_token, nonce);
   const admin = await bootstrapAdmin(c.env.DB, c.env, who.sub, who.email, who.email_verified); // 403 not_an_admin otherwise
   if (!c.env.SESSION_SECRET) return c.text("SESSION_SECRET not configured", 500);
@@ -150,17 +153,23 @@ app.post("/m/:id/delete-user", async (c) => {
   return c.redirect(`/?app=${m.app}`, 303);
 });
 
-app.get("/apps", async (c) => {
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf), csrf));
-});
+// A key or token is shown once, on the page the action that made it returns.
+const appsPage = async (c: Context<Ctx>, newKey?: { id: string; key: string; notice?: boolean }) => {
+  const { csrf } = c.get("admin");
+  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, newKey), csrf));
+};
+const tokensPage = async (c: Context<Ctx>, created?: { name: string; token: string }) => {
+  const { csrf } = c.get("admin");
+  return c.html(layout("Tokens", tokensView(await listAdminTokens(c.env.DB), csrf, created), csrf));
+};
+
+app.get("/apps", (c) => appsPage(c));
 
 app.post("/apps", async (c) => {
   const f = await readForm(c);
   const id = f.id ?? "";
-  const { key } = await createApp(c.env.DB, id, { retention_days: Number(f.retention_days || 90) });
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, { id, key }), csrf));
+  const { key } = await createApp(c.env.DB, id, { retention_days: f.retention_days ? Number(f.retention_days) : undefined });
+  return appsPage(c, { id, key });
 });
 
 app.post("/apps/:id", async (c) => {
@@ -180,30 +189,22 @@ app.post("/apps/:id", async (c) => {
 app.post("/apps/:id/rotate", async (c) => {
   await readForm(c);
   const id = c.req.param("id");
-  const key = await rotateKey(c.env.DB, id);
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, { id, key }), csrf));
+  return appsPage(c, { id, key: await rotateKey(c.env.DB, id) });
 });
 
 app.post("/apps/:id/notice-key", async (c) => {
   await readForm(c);
   const id = c.req.param("id");
-  const key = await rotateNoticeKey(c.env.DB, id);
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, { id, key, notice: true }), csrf));
+  return appsPage(c, { id, key: await rotateNoticeKey(c.env.DB, id), notice: true });
 });
 
-app.get("/tokens", async (c) => {
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Tokens", tokensView(await listAdminTokens(c.env.DB), csrf), csrf));
-});
+app.get("/tokens", (c) => tokensPage(c));
 
 app.post("/tokens", async (c) => {
   const f = await readForm(c);
   const name = f.name ?? "";
   const { token } = await createAdminToken(c.env.DB, name);
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Tokens", tokensView(await listAdminTokens(c.env.DB), csrf, { name, token }), csrf));
+  return tokensPage(c, { name, token });
 });
 
 app.post("/tokens/:id/revoke", async (c) => {
@@ -212,5 +213,4 @@ app.post("/tokens/:id/revoke", async (c) => {
   return c.redirect("/tokens", 303);
 });
 
-export { app };
 export default { fetch: app.fetch };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { newId, isUuidV4, sha256Hex, randomToken } from "../src/core/ids";
+import { newId, isUuidV4, sha256Hex, randomToken, timingSafeEqual } from "../src/core/ids";
 
 describe("ids", () => {
   it("newId is a v4 uuid", () => expect(isUuidV4(newId())).toBe(true));
@@ -11,6 +11,12 @@ describe("ids", () => {
   it("sha256Hex is stable and handles Turkish text", async () => {
     expect(await sha256Hex("abc")).toBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
     expect(await sha256Hex("ışğİ")).toHaveLength(64);
+  });
+  it("timingSafeEqual compares every character, not just the first", () => {
+    expect(timingSafeEqual("abcdef", "abcdef")).toBe(true);
+    expect(timingSafeEqual("abcdef", "abcdeF")).toBe(false);
+    expect(timingSafeEqual("abcdef", "Abcdef")).toBe(false);
+    expect(timingSafeEqual("abc", "abcd")).toBe(false);
   });
   it("randomToken has prefix and 48 hex chars", () => {
     expect(randomToken("ulak_demo")).toMatch(/^ulak_demo_[0-9a-f]{48}$/);

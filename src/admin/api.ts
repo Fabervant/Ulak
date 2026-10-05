@@ -96,9 +96,7 @@ api.post("/messages/:id/status", async (c) => {
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = body.status ?? "";
   if (!statusList(c.env).includes(status)) throw new ApiError(400, "invalid_request", `status must be one of ${statusList(c.env).join(", ")}`, false, { field: "status" });
-  await setStatus(c.env.DB, c.req.param("id"), status).catch(() => {
-    throw notFound();
-  });
+  await setStatus(c.env.DB, c.req.param("id"), status);
   return c.json({ id: c.req.param("id"), status });
 });
 

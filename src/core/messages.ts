@@ -154,7 +154,7 @@ export async function listForUser(db: D1Database, app: string, user_ref: string,
 
 export async function setStatus(db: D1Database, id: string, status: string): Promise<void> {
   const r = await db.prepare("UPDATE messages SET status=?, last_activity_at=? WHERE id=?").bind(status, nowIso(), id).run();
-  if (!r.meta.changes) throw new Error("message not found");
+  if (!r.meta.changes) throw new ApiError(404, "not_found", "no such message", false);
 }
 
 /** Hard deletion of everything a user_ref owns in one app: images first, objects before rows,

@@ -1,6 +1,7 @@
 import { placeholders, slices } from "./sql";
 import { newId } from "./ids";
 import { nowIso } from "./time";
+import { invalid } from "./errors";
 
 export interface ReplyRow {
   id: string;
@@ -14,7 +15,7 @@ export const MAX_REPLY = 8000;
 
 export async function addReply(db: D1Database, messageId: string, senderRole: "owner", content: string): Promise<ReplyRow> {
   const text = content.trim();
-  if (!text || text.length > MAX_REPLY) throw new Error(`reply must be 1 to ${MAX_REPLY} characters`);
+  if (!text || text.length > MAX_REPLY) throw invalid("content", `reply must be 1 to ${MAX_REPLY} characters`);
   const row: ReplyRow = { id: newId(), message_id: messageId, sender_role: senderRole, content: text, created_at: nowIso() };
   await db.batch([
     db.prepare("INSERT INTO replies (id,message_id,sender_role,content,created_at) VALUES (?,?,?,?,?)").bind(row.id, row.message_id, row.sender_role, row.content, row.created_at),

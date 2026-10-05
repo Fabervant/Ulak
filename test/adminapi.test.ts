@@ -61,6 +61,10 @@ describe("admin API", () => {
     expect(r.status).toBe(201);
     expect((await r.json<{ content: string }>()).content).toBe("Hola, lo revisamos.");
     expect((await call(`/api/messages/${m.id}/replies`, { method: "POST", body: JSON.stringify({ content: " " }) })).status).toBe(400);
+    // A reply that can never fit must not be marked retryable, or a client would resend it forever.
+    const long = await call(`/api/messages/${m.id}/replies`, { method: "POST", body: JSON.stringify({ content: "x".repeat(8001) }) });
+    expect(long.status).toBe(400);
+    expect(await long.json()).toMatchObject({ error: "invalid_request", retryable: false, field: "content" });
     expect((await (await call(`/api/messages/${m.id}/status`, { method: "POST", body: JSON.stringify({ status: "viewed" }) })).json<{ status: string }>()).status).toBe("viewed");
     expect((await call(`/api/messages/${m.id}/status`, { method: "POST", body: JSON.stringify({ status: "nope" }) })).status).toBe(400);
     expect((await call(`/api/messages/${crypto.randomUUID()}/status`, { method: "POST", body: JSON.stringify({ status: "viewed" }) })).status).toBe(404);
@@ -85,12 +89,6 @@ describe("GET /status/:secret", () => {
   const S = { ...E, STATUS_SECRET: "a-very-long-random-status-secret" };
   const hit = (path: string, envOverride = S) => adminRequest(envOverride, path);
 
-  it("200 {ok:true} with the right secret when nothing is wrong", async () => {
-    const res = await hit("/status/a-very-long-random-status-secret");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-  });
-
   it("503 when a check is breached, so the monitor sees a real failure", async () => {
     const m = (await insertMessage(env.DB, mk(), "pending")).row;
     await env.DB.prepare("UPDATE messages SET received_at=?, notified_at=NULL WHERE id=?").bind(addMinutes(nowIso(), -30), m.id).run();
@@ -101,14 +99,17 @@ describe("GET /status/:secret", () => {
 
   it("404 on a wrong secret and when the feature is unconfigured, leaking nothing", async () => {
     expect((await hit("/status/wrong-secret")).status).toBe(404);
+    expect((await hit("/status/a-very-long-random-status-secreT")).status).toBe(404);
     const noSecret = { ...E } as typeof S;
     delete (noSecret as { STATUS_SECRET?: string }).STATUS_SECRET;
     expect((await hit("/status/a-very-long-random-status-secret", noSecret)).status).toBe(404);
   });
 
-  it("reveals no data beyond the ok flag", async () => {
+  it("200 with exactly {ok:true} when nothing is wrong, revealing no data", async () => {
     await insertMessage(env.DB, mk(), "pending");
-    const body = await (await hit("/status/a-very-long-random-status-secret")).text();
+    const res = await hit("/status/a-very-long-random-status-secret");
+    expect(res.status).toBe(200);
+    const body = await res.text();
     expect(body).toBe('{"ok":true}');
     expect(body).not.toMatch(/unnotified|retention|stored_|message/);
   });

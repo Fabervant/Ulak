@@ -1,5 +1,8 @@
 import { sha256Hex, randomToken } from "./ids";
 import { nowIso } from "./time";
+import { ApiError, invalid } from "./errors";
+
+const appNotFound = (id: string) => new ApiError(404, "not_found", `app ${id} not found`, false);
 
 export interface AppRow {
   id: string;
@@ -41,15 +44,15 @@ const ORIGIN = /^https?:\/\/[^/\s]+$/;
 
 function validatePatch(cur: AppRow, patch: AppPatch): { days: number; images: boolean; notify: boolean; origins: string[] } {
   const days = patch.retention_days ?? cur.retention_days;
-  if (!Number.isInteger(days) || days < 1 || days > 3650) throw new Error("retention_days must be 1 to 3650");
+  if (!Number.isInteger(days) || days < 1 || days > 3650) throw invalid("retention_days", "retention_days must be 1 to 3650");
   const origins = patch.allowed_origins ?? cur.allowed_origins;
-  for (const o of origins) if (!ORIGIN.test(o)) throw new Error(`bad origin ${o}`);
+  for (const o of origins) if (!ORIGIN.test(o)) throw invalid("allowed_origins", `bad origin ${o}`);
   return { days, images: patch.images_enabled ?? cur.images_enabled, notify: patch.notify_enabled ?? cur.notify_enabled, origins };
 }
 
 export async function createApp(db: D1Database, id: string, opts: AppPatch = {}): Promise<{ app: AppRow; key: string }> {
-  if (!APP_ID.test(id)) throw new Error("app id must match [a-z0-9_-]{2,32}");
-  if (await getApp(db, id)) throw new Error(`app ${id} already exists`);
+  if (!APP_ID.test(id)) throw invalid("id", "app id must match [a-z0-9_-]{2,32}");
+  if (await getApp(db, id)) throw invalid("id", `app ${id} already exists`);
   const defaults: AppRow = { id, key_hash: "", retention_days: 90, images_enabled: false, notify_enabled: false, allowed_origins: [], created_at: "", has_notice_key: false };
   const { days, images, notify, origins } = validatePatch(defaults, opts);
   const key = randomToken(`ulak_${id}`);
@@ -77,7 +80,7 @@ export async function listApps(db: D1Database): Promise<AppRow[]> {
 
 export async function updateApp(db: D1Database, id: string, patch: AppPatch): Promise<void> {
   const cur = await getApp(db, id);
-  if (!cur) throw new Error(`app ${id} not found`);
+  if (!cur) throw appNotFound(id);
   const { days, images, notify, origins } = validatePatch(cur, patch);
   await db
     .prepare("UPDATE apps SET retention_days=?, images_enabled=?, notify_enabled=?, allowed_origins=? WHERE id=?")
@@ -88,7 +91,7 @@ export async function updateApp(db: D1Database, id: string, patch: AppPatch): Pr
 export async function rotateKey(db: D1Database, id: string): Promise<string> {
   const key = randomToken(`ulak_${id}`);
   const r = await db.prepare("UPDATE apps SET key_hash=? WHERE id=?").bind(await sha256Hex(key), id).run();
-  if (!r.meta.changes) throw new Error(`app ${id} not found`);
+  if (!r.meta.changes) throw appNotFound(id);
   return key;
 }
 
@@ -96,7 +99,7 @@ export async function rotateKey(db: D1Database, id: string): Promise<string> {
 export async function rotateNoticeKey(db: D1Database, id: string): Promise<string> {
   const key = randomToken(`ulak_notice_${id}`);
   const r = await db.prepare("UPDATE apps SET notice_key_hash=? WHERE id=?").bind(await sha256Hex(key), id).run();
-  if (!r.meta.changes) throw new Error(`app ${id} not found`);
+  if (!r.meta.changes) throw appNotFound(id);
   return key;
 }
 

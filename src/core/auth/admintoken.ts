@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../env";
-import { ApiError } from "../errors";
+import { ApiError, invalid } from "../errors";
 import { newId, randomToken, sha256Hex } from "../ids";
 import { nowIso } from "../time";
 
@@ -16,7 +16,7 @@ const TOKEN = /^ulak_admin_[0-9a-f]{48}$/;
 
 export async function createAdminToken(db: D1Database, name: string): Promise<{ id: string; token: string }> {
   const clean = name.trim().slice(0, 64);
-  if (!clean) throw new Error("token name required");
+  if (!clean) throw invalid("name", "token name required");
   const token = randomToken("ulak_admin");
   const id = newId();
   await db.prepare("INSERT INTO admin_tokens (id,name,token_hash,created_at) VALUES (?,?,?,?)").bind(id, clean, await sha256Hex(token), nowIso()).run();

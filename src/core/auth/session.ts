@@ -1,4 +1,5 @@
 import { nowSec } from "../time";
+import { timingSafeEqual } from "../ids";
 
 const enc = new TextEncoder();
 const b64u = (b: ArrayBuffer | Uint8Array) =>
@@ -44,10 +45,7 @@ export async function readSession(secret: string, cookie: string | undefined): P
   const [payload, sig] = cookie.split(".");
   if (!payload || !sig) return null;
   const want = await mac(secret, payload);
-  if (want.length !== sig.length) return null;
-  let diff = 0;
-  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
-  if (diff !== 0) return null;
+  if (!timingSafeEqual(want, sig)) return null;
   try {
     const p = JSON.parse(new TextDecoder().decode(unb64u(payload))) as { sub: string; csrf: string; iat?: number; auth?: number; exp: number };
     if (typeof p.iat !== "number" || p.exp < nowSec()) return null;
