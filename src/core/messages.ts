@@ -145,10 +145,27 @@ export async function touchActivity(db: D1Database, id: string, iso: string): Pr
   await db.prepare("UPDATE messages SET last_activity_at=? WHERE id=?").bind(iso, id).run();
 }
 
+const LIST_PAGE = 200;
+
+/** A user's messages, oldest activity first. Without `since`, the newest LIST_PAGE. With it, the
+ *  next LIST_PAGE changed after it, widened to every row sharing the last one's activity time:
+ *  the cursor is that time and `since` is strict, so a page that split a tie would lose the rest. */
 export async function listForUser(db: D1Database, app: string, user_ref: string, sinceIso: string | null): Promise<MessageRow[]> {
   const q = sinceIso
-    ? db.prepare("SELECT * FROM messages WHERE app=? AND user_ref=? AND last_activity_at>? ORDER BY last_activity_at, received_at LIMIT 200").bind(app, user_ref, sinceIso)
-    : db.prepare("SELECT * FROM messages WHERE app=? AND user_ref=? ORDER BY last_activity_at, received_at LIMIT 200").bind(app, user_ref);
+    ? db
+        .prepare(
+          `SELECT * FROM messages WHERE app=?1 AND user_ref=?2 AND last_activity_at>?3 AND last_activity_at <= COALESCE(
+             (SELECT last_activity_at FROM messages WHERE app=?1 AND user_ref=?2 AND last_activity_at>?3 ORDER BY last_activity_at LIMIT 1 OFFSET ${LIST_PAGE - 1}),
+             last_activity_at)
+           ORDER BY last_activity_at, received_at, id`,
+        )
+        .bind(app, user_ref, sinceIso)
+    : db
+        .prepare(
+          `SELECT * FROM (SELECT * FROM messages WHERE app=? AND user_ref=? ORDER BY last_activity_at DESC, received_at DESC, id DESC LIMIT ${LIST_PAGE})
+           ORDER BY last_activity_at, received_at, id`,
+        )
+        .bind(app, user_ref);
   return (await q.all<MessageRow>()).results;
 }
 

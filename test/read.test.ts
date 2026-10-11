@@ -45,6 +45,37 @@ describe("GET /v1/messages", () => {
     expect(j.messages[0]!.context).toBeUndefined();
     expect(j.cursor).toBe((await getMessage(env.DB, mine.id))!.last_activity_at);
   });
+  // Seeds n messages for U, the i-th last active i seconds after `from`, or all at `from` when tied.
+  const seed = (n: number, from: string, tied = false, prefix = "s") =>
+    env.DB.prepare(
+      `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM k WHERE i<?1)
+       INSERT INTO messages (id,app,user_ref,app_version,platform,message,client_msg_id,body_hash,status,received_at,last_activity_at)
+       SELECT printf('%s-%04d',?4,i),'demo',?3,'1','web',printf('m%d',i),printf('%s-%04d',?4,i),'h','pending',?2,
+              strftime('%Y-%m-%dT%H:%M:%fZ', ?2, '+' || (CASE WHEN ?5 THEN 0 ELSE i END) || ' seconds') FROM k`,
+    )
+      .bind(n, from, U, prefix, tied ? 1 : 0)
+      .run();
+  type Listed = { messages: Array<{ id: string; last_activity_at: string }>; cursor: string };
+
+  it("without since, a user past 200 messages gets the newest 200, oldest first, never the oldest 200", async () => {
+    await seed(250, "2026-01-01T00:00:00.000Z");
+    const j = await (await get(`user_ref=${U}`)).json<Listed>();
+    expect(j.messages).toHaveLength(200);
+    expect(j.messages[0]!.id).toBe("s-0051");
+    expect(j.messages[199]!.id).toBe("s-0250");
+    expect(j.cursor).toBe(j.messages[199]!.last_activity_at);
+  });
+
+  it("a page never splits messages that share one last activity, so the cursor skips none", async () => {
+    await seed(199, "2026-01-01T00:00:00.000Z");
+    await seed(3, "2026-02-01T00:00:00.000Z", true, "t");
+    const page = await (await get(`user_ref=${U}&since=2025-12-31T00:00:00.000Z`)).json<Listed>();
+    expect(page.messages).toHaveLength(202);
+    expect(page.messages.slice(-3).map((m) => m.id)).toEqual(["t-0001", "t-0002", "t-0003"]);
+    expect(page.cursor).toBe("2026-02-01T00:00:00.000Z");
+    expect((await (await get(`user_ref=${U}&since=${encodeURIComponent(page.cursor)}`)).json<Listed>()).messages).toHaveLength(0);
+  });
+
   it("since cursor returns only newer activity; unknown user_ref is an empty 200", async () => {
     const a = (await insertMessage(env.DB, mk(), "pending")).row;
     const first = await (await get(`user_ref=${U}`)).json<{ cursor: string }>();

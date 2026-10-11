@@ -124,8 +124,10 @@ first, each with `id`, `received_at`, `last_activity_at`, `status`, `status_labe
 in the message's locale, English fallback), `message`, and `replies` (each `id`, `sender_role`,
 `content`, `created_at`). Never returns `contact_email`, `context`, `last_error` or attachments.
 
-- `since` is an ISO 8601 timestamp; omit it for everything. The response carries `cursor`, the
-  largest `last_activity_at` returned, or the request's `since` when nothing changed.
+- `since` is an ISO 8601 timestamp. Without it, the response holds the user's 200 most recently
+  active messages. With it, the next 200 changed after it, plus any further messages sharing the
+  last one's `last_activity_at`, so that following `cursor` never skips one. The response carries
+  `cursor`, the largest `last_activity_at` returned, or the request's `since` when nothing changed.
 - `ETag` is derived from the result. A matching `If-None-Match` returns `304`.
 - An unknown `user_ref` returns an empty list with `200`, never an error.
 - Minimum poll interval is 60 seconds per `user_ref`. Faster polling gets `429` with
