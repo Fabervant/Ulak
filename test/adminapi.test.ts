@@ -36,6 +36,8 @@ describe("admin API", () => {
     expect(list.messages[0]).toMatchObject({ id: m.id, locale: "es", has_error: true, reply_count: 0, image_count: 0 });
     expect(list.messages[0]!.last_error).toBeUndefined();
     expect(list.messages[0]!.contact_email).toBeUndefined();
+    // Contact emails travel in these answers, so no cache along the way may keep them.
+    expect((await call(`/api/messages/${m.id}`)).headers.get("cache-control")).toBe("no-store");
     const one = await (await call(`/api/messages/${m.id}`)).json<Record<string, unknown>>();
     expect(one).toMatchObject({ id: m.id, last_error: "E", context: { a: 1 }, contact_email: "x@example.invalid", replies: [], images: [] });
     expect(one.body_hash).toBeUndefined();
@@ -61,6 +63,9 @@ describe("admin API", () => {
     expect(r.status).toBe(201);
     expect((await r.json<{ content: string }>()).content).toBe("Hola, lo revisamos.");
     expect((await call(`/api/messages/${m.id}/replies`, { method: "POST", body: JSON.stringify({ content: " " }) })).status).toBe(400);
+    const empty = await call(`/api/messages/${m.id}/replies`, { method: "POST", body: "{}" });
+    expect(empty.status).toBe(400);
+    expect(await empty.json()).toMatchObject({ error: "invalid_request", retryable: false, field: "content" });
     // A reply that can never fit must not be marked retryable, or a client would resend it forever.
     const long = await call(`/api/messages/${m.id}/replies`, { method: "POST", body: JSON.stringify({ content: "x".repeat(8001) }) });
     expect(long.status).toBe(400);

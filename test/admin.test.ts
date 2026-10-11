@@ -41,10 +41,10 @@ const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 
 // same id would be checked against the first.
 const googleKey = generateKeyPair("RS256");
 /** Programs Google to accept the next code exchange as `sub` (the pinned admin by default) with this nonce. */
-async function googleSignsIn(nonce: string, sub = "sub-1", email = "a@example.invalid") {
+async function googleSignsIn(nonce: string, sub = "sub-1", email = "a@example.invalid", emailVerified = true) {
   const { publicKey, privateKey } = await googleKey;
   const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "RS256", use: "sig" };
-  const idToken = await new SignJWT({ email, email_verified: true, nonce })
+  const idToken = await new SignJWT({ email, email_verified: emailVerified, nonce })
     .setProtectedHeader({ alg: "RS256", kid: "k1" })
     .setIssuer("https://accounts.google.com")
     .setAudience(E.GOOGLE_CLIENT_ID ?? "")
@@ -80,6 +80,16 @@ describe("admin surface", () => {
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toContain("https://accounts.google.com/o/oauth2/v2/auth?client_id=test-client-id");
     expect(res.headers.get("set-cookie")).toContain("ulak_oauth=");
+    // Each sign-in gets its own state and nonce, and Google is sent exactly the ones the cookie holds.
+    const pair = async () => {
+      const r = await req("/auth/login", {}, null);
+      const q = new URL(r.headers.get("location")!).searchParams;
+      expect(r.headers.get("set-cookie")).toContain(`ulak_oauth=${q.get("state")}.${q.get("nonce")};`);
+      return [q.get("state"), q.get("nonce")];
+    };
+    const [a, b] = [await pair(), await pair()];
+    expect(a[0]).not.toBe(b[0]);
+    expect(a[1]).not.toBe(b[1]);
   });
   it("lists messages grouped by app with pending counts and escapes content", async () => {
     await insertMessage(env.DB, mk(), "pending");
@@ -140,6 +150,7 @@ describe("admin surface", () => {
     expect(set.headers.get("location")).toBe(`/m/${m.id}`);
     expect((await getMessage(env.DB, m.id))!.status).toBe("in_progress");
     expect((await form(`/m/${m.id}/status`, { status: "bogus" })).status).toBe(400);
+    expect((await getMessage(env.DB, m.id))!.status).toBe("in_progress");
     expect((await form(`/m/${m.id}/reply`, { content: "x".repeat(8001) })).status).toBe(400);
   });
   it("an unknown message is 404 to every message form; an anonymous sender cannot be deleted by reference", async () => {
@@ -170,9 +181,14 @@ describe("admin surface", () => {
   });
   it("delete-user removes the sender's messages and their stored images", async () => {
     await updateApp(env.DB, "demo", { images_enabled: true });
-    const { imageId, messageId } = await imageOnMessage(key, hex());
+    const ref = hex();
+    const { imageId, messageId } = await imageOnMessage(key, ref);
     const r2Key = (await getImage(env.DB, imageId))!.r2_key;
+    // The same reference in another app is another person's: it stays.
+    await createApp(env.DB, "other");
+    const elsewhere = (await insertMessage(env.DB, submission({ app: "other", user_ref: ref }), "pending")).row.id;
     const res = await form(`/m/${messageId}/delete-user`, {});
+    expect(await getMessage(env.DB, elsewhere)).not.toBeNull();
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/?app=demo");
     expect(await getMessage(env.DB, messageId)).toBeNull();
@@ -195,7 +211,8 @@ describe("admin surface", () => {
     expect(await row("newapp")).toEqual({ retention_days: 45, images_enabled: 1, notify_enabled: 1, allowed_origins: '["https://a.example","https://b.example"]' });
     // An app served only through its own server has no origins; the empty field must save.
     expect((await form("/apps/newapp", { retention_days: "45", allowed_origins: "" })).status).toBe(303);
-    expect((await row("newapp"))!.allowed_origins).toBe("[]");
+    // An unticked box is absent from the form, and absent means off: notices and images stop.
+    expect(await row("newapp")).toMatchObject({ images_enabled: 0, notify_enabled: 0, allowed_origins: "[]" });
     const rotated = await form("/apps/newapp/rotate", {});
     expect(await rotated.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
   });
@@ -253,6 +270,8 @@ describe("without a session secret the panel fails closed", () => {
     expect(res.status).toBe(500);
     expect(await res.text()).toBe("SESSION_SECRET not configured");
     expect(sessionSet(res)).toBeUndefined();
+    // Refused before the code is spent at Google or an admin row is written.
+    expect(outbound).not.toHaveBeenCalled();
   });
 });
 
@@ -280,6 +299,8 @@ describe("sign-out leaves the browser a stranger", () => {
         const fields = chunk.slice(0, chunk.indexOf("</form>"));
         const typed = /<(input(?![^>]*type="(hidden|checkbox)")|textarea)/.test(fields);
         if (typed) expect(tag, `${path}: <form${tag}>`).toContain('autocomplete="off"');
+        // Every post form, the layout's sign-outs included, carries this session's token or it is refused.
+        if (tag.includes('method="post"')) expect(fields, `${path}: <form${tag}>`).toContain(`name="csrf" value="${csrf}"`);
       }
     }
   });
@@ -304,6 +325,7 @@ describe("sign-out leaves the browser a stranger", () => {
     outbound.mockResolvedValueOnce(new Response("nope", { status: 500 }));
     const failed = await callback("s1", "n1");
     expect(failed.status).toBe(500);
+    expect(await failed.text()).toBe("internal error");
     expect(cleared(failed, "ulak_oauth", "/auth")).toBeDefined();
 
     // The exchange succeeds: the session cookie is set and the state cookie is cleared in the same response.
@@ -329,6 +351,22 @@ describe("sign-out leaves the browser a stranger", () => {
     expect(sessionSet(res)).toBeUndefined();
     expect(cleared(res, "ulak_oauth", "/auth")).toBeDefined();
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("not_an_admin"));
+    warn.mockRestore();
+  });
+
+  it("a bootstrap address pins its account only when Google says the address is verified", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pinned =(sub: string) => env.DB.prepare("SELECT sub FROM admins WHERE sub=?").bind(sub).first();
+    await googleSignsIn("n1", "sub-new", "admin@example.invalid", false);
+    const refused = await callback("s1", "n1");
+    expect(refused.status).toBe(403);
+    expect(sessionSet(refused)).toBeUndefined();
+    expect(await pinned("sub-new")).toBeNull();
+    await googleSignsIn("n2", "sub-new", "admin@example.invalid", true);
+    const accepted = await callback("s2", "n2");
+    expect(accepted.status).toBe(302);
+    expect(sessionSet(accepted)).toBeDefined();
+    expect(await pinned("sub-new")).not.toBeNull();
     warn.mockRestore();
   });
 });
@@ -364,6 +402,21 @@ describe("a session lives while used and can be ended everywhere", () => {
       expect(cleared(res, "ulak_oauth", "/auth"), path).toBeDefined();
       expect(res.headers.getSetCookie(), path).toHaveLength(2);
     }
+  });
+
+  it("signing out on a device whose session was already ended still leaves it a stranger", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Sign out everywhere on another device, then Sign out on this one: the dead cookie must go.
+    await revokeSessions(env.DB, "sub-1", nowSec());
+    const res = await form("/auth/logout", {});
+    expect(res.headers.get("location")).toBe("/auth/login");
+    expect(cleared(res, "ulak_admin", "/")).toBeDefined();
+    expect(cleared(res, "ulak_oauth", "/auth")).toBeDefined();
+    // Any refused cookie is cleared, so a removed admin's browser keeps nothing of the account either.
+    const unpinned = await req("/", {}, await createSession("s3", "sub-9"));
+    expect(unpinned.status).toBe(403);
+    expect(cleared(unpinned, "ulak_admin", "/")).toBeDefined();
+    warn.mockRestore();
   });
 
   it("sign out everywhere ends this session and every other device's", async () => {

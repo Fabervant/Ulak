@@ -3,14 +3,14 @@ import { getCookie } from "hono/cookie";
 import type { Env } from "../core/env";
 import { statusList } from "../core/env";
 import { ApiError } from "../core/errors";
-import { requireAdmin, readForm, CsrfError, type AdminVars } from "./auth";
+import { requireAdmin, readForm, CsrfError, logAuthFailure, dropCookies, type AdminVars } from "./auth";
 import { layout } from "./views/layout";
 import { listView } from "./views/list";
 import { detailView } from "./views/detail";
 import { appsView } from "./views/apps";
 import { tokensView } from "./views/tokens";
 import { authUrl, exchangeCode, verifyIdToken } from "../core/auth/google";
-import { createSession, sessionCookie, clearSessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie } from "../core/auth/session";
+import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie } from "../core/auth/session";
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
@@ -37,7 +37,7 @@ app.use("*", async (c, next) => {
 app.onError((err, c) => {
   if (err instanceof CsrfError) return c.text("forbidden: bad csrf token", 403);
   if (err instanceof ApiError) {
-    if (err.status === 403) console.warn(`admin auth failed: ${err.code} path=${c.req.path}`);
+    if (err.status === 403) logAuthFailure(err.code, c.req.path);
     return c.text(err.detail, err.status as 400);
   }
   console.error("admin unhandled", err);
@@ -52,7 +52,7 @@ app.route("/api", api);
 // only a status code: 200 healthy, 503 not. No counts, no messages, nothing about the data.
 // A wrong secret and an unconfigured feature both give a bare 404, so probing cannot tell
 // which. It does not hide that the route exists - other unknown paths redirect to sign-in -
-// but the secret is 48 hex characters and is the only thing guarding it. Comparison is over
+// and the secret's length and randomness are the only thing guarding it. Comparison is over
 // SHA-256 digests so a wrong guess cannot be narrowed down by timing.
 app.get("/status/:secret", async (c) => {
   const expected = c.env.STATUS_SECRET;
@@ -80,22 +80,20 @@ app.get("/auth/callback", async (c) => {
   if (!state || !nonce || c.req.query("state") !== state || !code) return c.text("sign-in state mismatch; start again at /auth/login", 400);
   // The state matched, so it is spent whatever happens next; the header survives an error response.
   c.header("set-cookie", clearOauthCookie());
+  if (!c.env.SESSION_SECRET) return c.text("SESSION_SECRET not configured", 500);
   const { id_token } = await exchangeCode(c.env, code, callbackUrl(c.env));
   const who = await verifyIdToken(c.env, id_token, nonce);
   const admin = await bootstrapAdmin(c.env.DB, c.env, who.sub, who.email, who.email_verified); // 403 not_an_admin otherwise
-  if (!c.env.SESSION_SECRET) return c.text("SESSION_SECRET not configured", 500);
   c.header("set-cookie", sessionCookie(await createSession(c.env.SESSION_SECRET, admin.sub)), { append: true });
   return c.redirect("/", 302);
 });
 
 app.use("/*", requireAdmin());
 
-// Sign-out leaves the browser as on a first visit: both cookies the panel ever sets are
-// expired here, on their own paths. The pages are already no-store and the forms opt out of
-// autofill, so nothing else of the admin's remains on the device.
+// Sign-out leaves the browser as on a first visit: both cookies go. The pages are already
+// no-store and the forms opt out of autofill, so nothing else of the admin's remains on the device.
 const signedOut = (c: Context<Ctx>) => {
-  c.header("set-cookie", clearSessionCookie());
-  c.header("set-cookie", clearOauthCookie(), { append: true });
+  dropCookies(c);
   return c.redirect("/auth/login", 303);
 };
 
@@ -112,12 +110,14 @@ app.post("/auth/logout-all", async (c) => {
 });
 
 // --- pages ---
+// Every page carries the session's csrf token, in its own forms and the layout's sign-out forms.
+const page = (c: Context<Ctx>, title: string, body: (csrf: string) => Parameters<typeof layout>[1]) =>
+  c.html(layout(title, body(c.get("admin").csrf), c.get("admin").csrf));
 app.get("/", async (c) => {
   const statuses = statusList(c.env);
   const filter = { app: c.req.query("app") || undefined, status: c.req.query("status") || undefined };
   const [rows, counts, apps] = await Promise.all([listAdmin(c.env.DB, filter), countByAppAndStatus(c.env.DB, statuses[0] ?? "pending"), listApps(c.env.DB)]);
-  const csrf = c.get("admin").csrf;
-  return c.html(layout("Messages", listView(rows, counts, apps.map((a) => a.id), filter, statuses), csrf));
+  return page(c, "Messages", () => listView(rows, counts, apps.map((a) => a.id), filter, statuses));
 });
 
 app.get("/m/:id", async (c) => {
@@ -125,8 +125,7 @@ app.get("/m/:id", async (c) => {
   if (!m) return c.text("not found", 404);
   const [replies, images] = await Promise.all([listReplies(c.env.DB, m.id), listImagesFor(c.env.DB, m.id)]);
   const urls = (await imageLinks(c.env, images.map((i) => i.id))) ?? [];
-  const csrf = c.get("admin").csrf;
-  return c.html(layout(`Message ${m.id.slice(0, 8)}`, detailView(m, replies, urls, statusList(c.env), csrf), csrf));
+  return page(c, `Message ${m.id.slice(0, 8)}`, (csrf) => detailView(m, replies, urls, statusList(c.env), csrf));
 });
 
 app.post("/m/:id/reply", async (c) => {
@@ -139,9 +138,7 @@ app.post("/m/:id/reply", async (c) => {
 
 app.post("/m/:id/status", async (c) => {
   const f = await readForm(c);
-  const status = f.status ?? "";
-  if (!statusList(c.env).includes(status)) return c.text("unknown status", 400);
-  await setStatus(c.env.DB, c.req.param("id"), status);
+  await setStatus(c.env.DB, c.req.param("id"), f.status ?? "", statusList(c.env));
   return c.redirect(`/m/${c.req.param("id")}`, 303);
 });
 
@@ -154,13 +151,13 @@ app.post("/m/:id/delete-user", async (c) => {
 });
 
 // A key or token is shown once, on the page the action that made it returns.
-const appsPage = async (c: Context<Ctx>, newKey?: { id: string; key: string; notice?: boolean }) => {
-  const { csrf } = c.get("admin");
-  return c.html(layout("Apps", appsView(await listApps(c.env.DB), csrf, newKey), csrf));
+const appsPage = async (c: Context<Ctx>, newKey?: Parameters<typeof appsView>[2]) => {
+  const apps = await listApps(c.env.DB);
+  return page(c, "Apps", (csrf) => appsView(apps, csrf, newKey));
 };
-const tokensPage = async (c: Context<Ctx>, created?: { name: string; token: string }) => {
-  const { csrf } = c.get("admin");
-  return c.html(layout("Tokens", tokensView(await listAdminTokens(c.env.DB), csrf, created), csrf));
+const tokensPage = async (c: Context<Ctx>, created?: Parameters<typeof tokensView>[2]) => {
+  const tokens = await listAdminTokens(c.env.DB);
+  return page(c, "Tokens", (csrf) => tokensView(tokens, csrf, created));
 };
 
 app.get("/apps", (c) => appsPage(c));

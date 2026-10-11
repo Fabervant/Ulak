@@ -88,15 +88,13 @@ api.post("/messages/:id/replies", async (c) => {
   const m = await getMessage(c.env.DB, c.req.param("id"));
   if (!m) throw notFound();
   const body = await c.req.json<{ content?: string }>().catch(() => ({}) as { content?: string });
-  if (!body.content?.trim()) throw new ApiError(400, "invalid_request", "content is required", false, { field: "content" });
-  return c.json(await addReply(c.env.DB, m.id, "owner", body.content), 201);
+  return c.json(await addReply(c.env.DB, m.id, "owner", body.content ?? ""), 201);
 });
 
 api.post("/messages/:id/status", async (c) => {
   const body = await c.req.json<{ status?: string }>().catch(() => ({}) as { status?: string });
   const status = body.status ?? "";
-  if (!statusList(c.env).includes(status)) throw new ApiError(400, "invalid_request", `status must be one of ${statusList(c.env).join(", ")}`, false, { field: "status" });
-  await setStatus(c.env.DB, c.req.param("id"), status);
+  await setStatus(c.env.DB, c.req.param("id"), status, statusList(c.env));
   return c.json({ id: c.req.param("id"), status });
 });
 

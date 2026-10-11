@@ -51,7 +51,7 @@ describe("GET /v1/messages", () => {
     const U2 = hex();
     void U2;
     // second poll of the same user in the minute would be 429; use a fresh user for the negative case below
-    await setStatus(env.DB, a.id, "completed");
+    await setStatus(env.DB, a.id, "completed", ["completed"]);
     const after = await (await get(`user_ref=${U}&since=${encodeURIComponent(first.cursor)}`)).json<{ messages: Array<{ status: string }> }>();
     expect(after.messages).toHaveLength(1);
     expect(after.messages[0]!.status).toBe("completed");

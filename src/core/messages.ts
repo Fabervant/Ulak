@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import { ApiError } from "./errors";
+import { ApiError, invalid } from "./errors";
 import { newId, sha256Hex } from "./ids";
 import { allClaimable, claimStatement, deleteImagesWhere } from "./images";
 import { D1_MAX_PARAMS, placeholders } from "./sql";
@@ -152,7 +152,9 @@ export async function listForUser(db: D1Database, app: string, user_ref: string,
   return (await q.all<MessageRow>()).results;
 }
 
-export async function setStatus(db: D1Database, id: string, status: string): Promise<void> {
+/** Refuses a status outside the deployment's list before touching the row, so an unknown status on an unknown id is 400. */
+export async function setStatus(db: D1Database, id: string, status: string, allowed: string[]): Promise<void> {
+  if (!allowed.includes(status)) throw invalid("status", `status must be one of ${allowed.join(", ")}`);
   const r = await db.prepare("UPDATE messages SET status=?, last_activity_at=? WHERE id=?").bind(status, nowIso(), id).run();
   if (!r.meta.changes) throw new ApiError(404, "not_found", "no such message", false);
 }
