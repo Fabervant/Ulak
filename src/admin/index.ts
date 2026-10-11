@@ -10,7 +10,7 @@ import { detailView } from "./views/detail";
 import { appsView } from "./views/apps";
 import { tokensView } from "./views/tokens";
 import { authUrl, exchangeCode, verifyIdToken } from "../core/auth/google";
-import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie } from "../core/auth/session";
+import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie, REVEAL_COOKIE, sealReveal, openReveal, revealCookie, clearRevealCookie } from "../core/auth/session";
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
@@ -150,8 +150,21 @@ app.post("/m/:id/delete-user", async (c) => {
   return c.redirect(`/?app=${m.app}`, 303);
 });
 
-// A key or token is shown once, on the page the action that made it returns.
-const appsPage = async (c: Context<Ctx>, newKey?: Parameters<typeof appsView>[2]) => {
+// A key or token is shown once. The post that made it redirects, carrying it sealed in a cookie,
+// and the page opens and expires that cookie: a refresh is a plain read that makes nothing again.
+// requireAdmin refuses every request while SESSION_SECRET is unset, so it is set here.
+type Shown = "apps" | "tokens";
+const shownOnce = async (c: Context<Ctx>, page: Shown, shown: unknown) => {
+  c.header("set-cookie", revealCookie(await sealReveal(c.env.SESSION_SECRET ?? "", c.get("admin").sub, page, shown)), { append: true });
+  return c.redirect(`/${page}`, 303);
+};
+const takeShown = async <T,>(c: Context<Ctx>, page: Shown): Promise<T | undefined> => {
+  const sealed = getCookie(c, REVEAL_COOKIE);
+  if (sealed === undefined) return undefined;
+  c.header("set-cookie", clearRevealCookie(), { append: true });
+  return openReveal<T>(c.env.SESSION_SECRET ?? "", sealed, c.get("admin").sub, page);
+};
+const appsPage =async (c: Context<Ctx>, newKey?: Parameters<typeof appsView>[2]) => {
   const apps = await listApps(c.env.DB);
   return page(c, "Apps", (csrf) => appsView(apps, csrf, newKey));
 };
@@ -160,13 +173,13 @@ const tokensPage = async (c: Context<Ctx>, created?: Parameters<typeof tokensVie
   return page(c, "Tokens", (csrf) => tokensView(tokens, csrf, created));
 };
 
-app.get("/apps", (c) => appsPage(c));
+app.get("/apps", async (c) => appsPage(c, await takeShown(c, "apps")));
 
 app.post("/apps", async (c) => {
   const f = await readForm(c);
   const id = f.id ?? "";
   const { key } = await createApp(c.env.DB, id, { retention_days: f.retention_days ? Number(f.retention_days) : undefined });
-  return appsPage(c, { id, key });
+  return shownOnce(c, "apps", { id, key });
 });
 
 app.post("/apps/:id", async (c) => {
@@ -186,22 +199,22 @@ app.post("/apps/:id", async (c) => {
 app.post("/apps/:id/rotate", async (c) => {
   await readForm(c);
   const id = c.req.param("id");
-  return appsPage(c, { id, key: await rotateKey(c.env.DB, id) });
+  return shownOnce(c, "apps", { id, key: await rotateKey(c.env.DB, id) });
 });
 
 app.post("/apps/:id/notice-key", async (c) => {
   await readForm(c);
   const id = c.req.param("id");
-  return appsPage(c, { id, key: await rotateNoticeKey(c.env.DB, id), notice: true });
+  return shownOnce(c, "apps", { id, key: await rotateNoticeKey(c.env.DB, id), notice: true });
 });
 
-app.get("/tokens", (c) => tokensPage(c));
+app.get("/tokens", async (c) => tokensPage(c, await takeShown(c, "tokens")));
 
 app.post("/tokens", async (c) => {
   const f = await readForm(c);
   const name = f.name ?? "";
   const { token } = await createAdminToken(c.env.DB, name);
-  return tokensPage(c, { name, token });
+  return shownOnce(c, "tokens", { name, token });
 });
 
 app.post("/tokens/:id/revoke", async (c) => {

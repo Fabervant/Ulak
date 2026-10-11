@@ -1,7 +1,7 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { getCookie } from "hono/cookie";
 import type { Env } from "../core/env";
-import { readSession, createSession, sessionCookie, SESSION_COOKIE, SESSION_RENEW_AFTER_SEC, clearSessionCookie, clearOauthCookie } from "../core/auth/session";
+import { readSession, createSession, sessionCookie, SESSION_COOKIE, SESSION_RENEW_AFTER_SEC, clearSessionCookie, clearOauthCookie, clearRevealCookie } from "../core/auth/session";
 import { findAdmin } from "../core/auth/admins";
 import { nowSec } from "../core/time";
 
@@ -9,10 +9,11 @@ export type AdminVars = { admin: { sub: string; csrf: string } };
 
 export const logAuthFailure = (reason: string, path: string) => console.warn(`admin auth failed: ${reason} path=${path}`);
 
-/** Expires both cookies the panel ever sets, each on its own path, leaving the browser as on a first visit. */
+/** Expires every cookie the panel ever sets, each on its own path, leaving the browser as on a first visit. */
 export function dropCookies(c: Context) {
   c.header("set-cookie", clearSessionCookie());
   c.header("set-cookie", clearOauthCookie(), { append: true });
+  c.header("set-cookie", clearRevealCookie(), { append: true });
 }
 
 /** Session cookie -> pinned admin, re-checked on every request. Failures are logged and distinguishable. */

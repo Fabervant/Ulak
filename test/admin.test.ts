@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
-import { createApp, updateApp } from "../src/core/apps";
+import { createApp, updateApp, findAppByKey } from "../src/core/apps";
 import { insertMessage, getMessage } from "../src/core/messages";
 import { getImage } from "../src/core/images";
 import { createSession, readSession } from "../src/core/auth/session";
@@ -33,6 +33,18 @@ const sessionSet = (res: Response) => res.headers.getSetCookie().find((c) => c.s
 const sessionValue = (setCookie: string) => setCookie.split(";")[0]!.slice("ulak_admin=".length);
 const cleared = (res: Response, name: string, path: string) =>
   res.headers.getSetCookie().find((c) => c.startsWith(`${name}=;`) && c.includes("Max-Age=0") && c.includes(`Path=${path}`));
+/** Follows a post that made a key or token: the page it redirects to, opened with the cookie the
+ *  post set, shows the secret once and expires that cookie. */
+const reveal = async (res: Response) => {
+  expect(res.status).toBe(303);
+  const set = res.headers.getSetCookie().find((c) => c.startsWith("ulak_reveal=") && !c.startsWith("ulak_reveal=;"))!;
+  expect(set).toMatch(/HttpOnly; Secure; SameSite=Strict; Path=\/; Max-Age=60$/);
+  const value = set.split(";")[0]!.slice("ulak_reveal=".length);
+  const page = await req(res.headers.get("location")!, { headers: { cookie: `ulak_admin=${cookie}; ulak_reveal=${value}` } });
+  expect(page.status).toBe(200);
+  expect(cleared(page, "ulak_reveal", "/")).toBeDefined();
+  return { value, text: await page.text() };
+};
 const nowSec = () => Math.floor(Date.now() / 1000);
 const hoursAgo = (h: number) => nowSec() - h * 3600;
 
@@ -196,11 +208,12 @@ describe("admin surface", () => {
     expect(await env.IMAGES.get(r2Key)).toBeNull();
   });
   it("the apps page creates, updates and rotates an app", async () => {
-    const created = await form("/apps", { id: "newapp", retention_days: "30" });
-    expect(created.status).toBe(200);
-    expect(await created.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
+    const created = await reveal(await form("/apps", { id: "newapp", retention_days: "30" }));
+    expect(created.text).toMatch(/ulak_newapp_[0-9a-f]{48}/);
+    // The cookie carrying it to the page is sealed: the key is not readable in it.
+    expect(created.value).not.toContain("ulak_newapp_");
     expect((await form("/apps", { id: "Bad Id", retention_days: "30" })).status).toBe(400);
-    expect((await form("/apps", { id: "plain" })).status).toBe(200);
+    expect((await form("/apps", { id: "plain" })).status).toBe(303);
     const row = (id: string) =>
       env.DB.prepare("SELECT retention_days, images_enabled, notify_enabled, allowed_origins FROM apps WHERE id=?").bind(id).first<{ retention_days: number; images_enabled: number; notify_enabled: number; allowed_origins: string }>();
     expect((await row("plain"))!.retention_days).toBe(90);
@@ -213,8 +226,27 @@ describe("admin surface", () => {
     expect((await form("/apps/newapp", { retention_days: "45", allowed_origins: "" })).status).toBe(303);
     // An unticked box is absent from the form, and absent means off: notices and images stop.
     expect(await row("newapp")).toMatchObject({ images_enabled: 0, notify_enabled: 0, allowed_origins: "[]" });
-    const rotated = await form("/apps/newapp/rotate", {});
-    expect(await rotated.text()).toMatch(/ulak_newapp_[0-9a-f]{48}/);
+    const rotated = await reveal(await form("/apps/newapp/rotate", {}));
+    const newKey = rotated.text.match(/ulak_newapp_[0-9a-f]{48}/)![0];
+    // A refresh of the page is a plain read: no key shown, and the key just copied still works.
+    expect(await (await req("/apps")).text()).not.toMatch(/ulak_newapp_[0-9a-f]{48}/);
+    expect(await findAppByKey(env.DB, newKey)).not.toBeNull();
+  });
+  it("a shown-once key is shown to no other admin, and a tampered or stale cookie shows nothing", async () => {
+    const { value } = await reveal(await form("/apps/demo/rotate", {}));
+    await pinAdmin("sub-2");
+    const other = await createSession("s3", "sub-2");
+    const shown = async (session: string, sealed: string, path = "/apps") => {
+      const res = await req(path, { headers: { cookie: `ulak_admin=${session}; ulak_reveal=${sealed}` } });
+      expect(cleared(res, "ulak_reveal", "/"), sealed).toBeDefined();
+      return /ulak_demo_[0-9a-f]{48}/.test(await res.text());
+    };
+    expect(await shown(cookie, value)).toBe(true);
+    expect(await shown(other, value)).toBe(false);
+    expect(await shown(cookie, value.slice(0, -2) + (value.endsWith("A") ? "BB" : "AA"))).toBe(false);
+    expect(await shown(cookie, "junk")).toBe(false);
+    // An app key's cookie opened on the tokens page shows nothing there.
+    expect(await shown(cookie, value, "/tokens")).toBe(false);
   });
   // The operator sees why a form was refused: a typed refusal from core, never a bare 500.
   it("every refused apps or tokens form answers its status with the reason", async () => {
@@ -235,7 +267,7 @@ describe("admin surface", () => {
   });
   it("the apps page issues a notice key, shown once and marked as server-only, and then says one exists", async () => {
     expect(await (await req("/apps")).text()).toContain("no notice key");
-    const issued = await (await form("/apps/demo/notice-key", {})).text();
+    const issued = (await reveal(await form("/apps/demo/notice-key", {}))).text;
     expect(issued).toMatch(/ulak_notice_demo_[0-9a-f]{48}/);
     expect(issued).toContain("never in a web page");
     const after = await (await req("/apps")).text();
@@ -243,10 +275,12 @@ describe("admin surface", () => {
     expect(after).toContain("notice key set");
   });
   it("the tokens page creates, lists and revokes an admin token", async () => {
-    const tok = await form("/tokens", { name: "laptop" });
-    expect(await tok.text()).toMatch(/ulak_admin_[0-9a-f]{48}/);
+    const tok = await reveal(await form("/tokens", { name: "laptop" }));
+    expect(tok.text).toMatch(/ulak_admin_[0-9a-f]{48}/);
     const page = await (await req("/tokens")).text();
     expect(page).toContain("laptop");
+    expect(page).not.toMatch(/ulak_admin_[0-9a-f]{48}/);
+    expect(await listAdminTokens(env.DB)).toHaveLength(1);
     // Sign out everywhere ends browser sessions only; the page says where a lost device's token is ended.
     expect(page).toContain("Sign out everywhere does not revoke these");
     const [t] = await listAdminTokens(env.DB);
@@ -400,7 +434,8 @@ describe("a session lives while used and can be ended everywhere", () => {
       expect(sessionSet(res), path).toBeUndefined();
       expect(cleared(res, "ulak_admin", "/"), path).toBeDefined();
       expect(cleared(res, "ulak_oauth", "/auth"), path).toBeDefined();
-      expect(res.headers.getSetCookie(), path).toHaveLength(2);
+      expect(cleared(res, "ulak_reveal", "/"), path).toBeDefined();
+      expect(res.headers.getSetCookie(), path).toHaveLength(3);
     }
   });
 

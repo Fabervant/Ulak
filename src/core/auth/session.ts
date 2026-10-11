@@ -76,3 +76,38 @@ export function oauthCookie(state: string, nonce: string): string {
 export function clearOauthCookie(): string {
   return `${OAUTH_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=0`;
 }
+
+/** A key or token made by a form post rides to the page the post redirects to in this cookie,
+ *  sealed so the browser's cookie store never holds it readable, and is shown there once. */
+export const REVEAL_COOKIE = "ulak_reveal";
+export const REVEAL_TTL_SEC = 60;
+
+const revealKey = async (secret: string) =>
+  crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", enc.encode(`reveal:${secret}`)), "AES-GCM", false, ["encrypt", "decrypt"]);
+
+/** Sealed to one admin and one page; it opens nowhere else and not after REVEAL_TTL_SEC. */
+export async function sealReveal(secret: string, sub: string, page: string, shown: unknown): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = enc.encode(JSON.stringify({ sub, page, shown, exp: nowSec() + REVEAL_TTL_SEC }));
+  return `${b64u(iv)}.${b64u(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await revealKey(secret), plain))}`;
+}
+
+/** The sealed value, or undefined for a cookie that is absent, altered, stale, or another admin's or page's. */
+export async function openReveal<T>(secret: string, cookie: string | undefined, sub: string, page: string): Promise<T | undefined> {
+  try {
+    const [iv, sealed] = (cookie ?? "").split(".");
+    const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64u(iv!) }, await revealKey(secret), unb64u(sealed!));
+    const p = JSON.parse(new TextDecoder().decode(plain)) as { sub: string; page: string; shown: T; exp: number };
+    return p.sub === sub && p.page === page && p.exp >= nowSec() ? p.shown : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function revealCookie(value: string): string {
+  return `${REVEAL_COOKIE}=${value}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${REVEAL_TTL_SEC}`;
+}
+
+export function clearRevealCookie(): string {
+  return `${REVEAL_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`;
+}
