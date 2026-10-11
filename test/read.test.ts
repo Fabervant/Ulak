@@ -76,6 +76,22 @@ describe("GET /v1/messages", () => {
     expect((await (await get(`user_ref=${U}&since=${encodeURIComponent(page.cursor)}`)).json<Listed>()).messages).toHaveLength(0);
   });
 
+  it("a since page holds at most 200 when no tie widens it, and the cursor picks up the rest", async () => {
+    await seed(250, "2026-01-01T00:00:00.000Z");
+    const first = await (await get(`user_ref=${U}&since=2025-12-31T00:00:00.000Z`)).json<Listed>();
+    expect(first.messages).toHaveLength(200);
+    expect(first.messages[199]!.id).toBe("s-0200");
+    const rest = await (await get(`user_ref=${U}&since=${encodeURIComponent(first.cursor)}`)).json<Listed>();
+    expect(rest.messages.map((m) => m.id)).toEqual(Array.from({ length: 50 }, (_, i) => `s-${String(i + 201).padStart(4, "0")}`));
+  });
+
+  it("since names an instant: without milliseconds or with an offset it reads the same rows", async () => {
+    await seed(3, "2026-01-01T00:00:00.000Z");
+    // 03:00:01+03:00 is 00:00:01Z, so the messages one and two seconds later follow it.
+    const j = await (await get(`user_ref=${U}&since=${encodeURIComponent("2026-01-01T03:00:01+03:00")}`)).json<Listed>();
+    expect(j.messages.map((m) => m.id)).toEqual(["s-0002", "s-0003"]);
+  });
+
   it("since cursor returns only newer activity; unknown user_ref is an empty 200", async () => {
     const a = (await insertMessage(env.DB, mk(), "pending")).row;
     const first = await (await get(`user_ref=${U}`)).json<{ cursor: string }>();

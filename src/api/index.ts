@@ -160,8 +160,10 @@ function userRefParam(raw: string | undefined): string {
 app.get("/v1/messages", requireAppKey(), async (c) => {
   const tenant = c.get("app");
   const user_ref = userRefParam(c.req.query("user_ref"));
-  const since = c.req.query("since") ?? null;
-  if (since !== null && !isIso(since)) throw new ApiError(400, "invalid_request", "since must be ISO 8601", false, { field: "since" });
+  const sinceRaw = c.req.query("since") ?? null;
+  if (sinceRaw !== null && !isIso(sinceRaw)) throw new ApiError(400, "invalid_request", "since must be ISO 8601", false, { field: "since" });
+  // Stored times are UTC with milliseconds and compared as text, so the cursor is written the same way.
+  const since = sinceRaw === null ? null : new Date(sinceRaw).toISOString();
   const limiters = [{ limiter: limiterFor(c.env.RL_READ_USER, memReadUser), key: `r:${tenant.id}:${user_ref}` }];
   if (c.env.READ_IP_BACKSTOP === "true") limiters.push({ limiter: memReadIp, key: `rip:${clientIp(c.req.raw, c.env)}` });
   await enforce(limiters, 60);

@@ -236,17 +236,25 @@ describe("admin surface", () => {
     const { value } = await reveal(await form("/apps/demo/rotate", {}));
     await pinAdmin("sub-2");
     const other = await createSession("s3", "sub-2");
+    const secret = /ulak_(demo|admin)_[0-9a-f]{48}/;
     const shown = async (session: string, sealed: string, path = "/apps") => {
       const res = await req(path, { headers: { cookie: `ulak_admin=${session}; ulak_reveal=${sealed}` } });
       expect(cleared(res, "ulak_reveal", "/"), sealed).toBeDefined();
-      return /ulak_demo_[0-9a-f]{48}/.test(await res.text());
+      return secret.test(await res.text());
     };
     expect(await shown(cookie, value)).toBe(true);
     expect(await shown(other, value)).toBe(false);
     expect(await shown(cookie, value.slice(0, -2) + (value.endsWith("A") ? "BB" : "AA"))).toBe(false);
     expect(await shown(cookie, "junk")).toBe(false);
-    // An app key's cookie opened on the tokens page shows nothing there.
+    // A cookie opens only on the page it was sealed for: an app key not on tokens, a token not on apps.
     expect(await shown(cookie, value, "/tokens")).toBe(false);
+    const token = await reveal(await form("/tokens", { name: "laptop" }));
+    expect(await shown(cookie, token.value, "/apps")).toBe(false);
+    // Past its 60 seconds the cookie shows nothing, even if the browser still sent it.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now + 61_000);
+    expect(await shown(cookie, value)).toBe(false);
+    clock.mockRestore();
   });
   // The operator sees why a form was refused: a typed refusal from core, never a bare 500.
   it("every refused apps or tokens form answers its status with the reason", async () => {
