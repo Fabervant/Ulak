@@ -1,5 +1,49 @@
 # Completed tasks
 
+## Session 9 — 2026-10-11
+
+Mailbox, refactor round 2 on the admin panel, refresh-safe key display, and the user message list
+fix agreed with both clients. Nothing deployed.
+
+- **Mailbox.** Six letters, all acted on and archived. The form-dialog, no-wordmark, sign-in-fix
+  and analytics rulings have no surface in Ulak: the admin panel has no sign-in screen (it
+  redirects straight to Google), no separate form pages, no wordmark, and no analytics. The
+  operations project was told by live message. It confirmed the `ulak@` group has been the consent
+  screen's support address since its own Session 209, so the support-address letter is archived
+  on its record, without a fresh console read-back.
+- **Refactor mandate, `src/admin/index.ts` round 2, CLOSED** (`a5e7969`). The reviewer ran 14
+  breaks (10 stayed green) and listed 11 defects, 2 that mattered, both test gaps:
+  - unticked app boxes saving as off;
+  - the callback passing Google's `email_verified` claim on.
+  Each test went red under its break. Tidy batch: delete-user scoping, fresh state and nonce, no-store
+  on the admin API, the status allow-list moved into `setStatus`, one auth-failure log, one
+  `page()` helper, shown-once types, a stale comment. D10 (reply pre-read) left open, equivalence
+  unsettled. From its observations:
+  - **Sign-out after "Sign out everywhere" elsewhere left the dead session cookie in the
+    browser.** `requireAdmin` now expires every panel cookie whenever it refuses a presented
+    session (`dropCookies`); the test is red on the base.
+  - The callback checks the session secret before spending Google's code.
+  - An unhandled error's text is pinned out of the response.
+  - The context-parser merge was declined because the two shapes differ.
+  The verify pass found D12 (csrf in every post form) and D13 (empty API reply), both now tested.
+  The owner kept the two new error texts.
+- **Refresh-safe key display** (`ecf14e4`, owner). Rotate key, New notice key, Create app and
+  Create token now redirect. The secret rides in `ulak_reveal`, sealed with AES-GCM to that admin
+  and page for 60 seconds. The page shows it once and expires it, and sign-out clears it.
+- **User message list** (`0886129`, `5e10a29`). Both clients were told first and answered that
+  neither change breaks them; both read without `since` and rely on ETag/304.
+  - A read without `since` now returns the newest 200, oldest first.
+  - A `since` page is widened to every row sharing its last activity time, because the cursor is
+    that time and `since` is strict.
+  - `since` is normalised with `toISOString()`, because an offset or a missing millisecond part
+    skipped rows when compared as text.
+  - The owner dropped the proposed `more` field.
+  - Spec section 5 is updated.
+- **Independent feature review**: 0 findings. Its test gaps are closed: a stale reveal cookie
+  (red with the expiry check removed), cross-page reveal, and the 200 cap on a `since` page.
+- `C:\tmp_apps_bak` was found already deleted.
+- Tests: 259 to 266.
+
 ## Session 8 — 2026-10-06
 
 Mailbox with a second client, refactor round on the admin panel, the text-free Telegram notice,
