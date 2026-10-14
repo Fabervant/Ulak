@@ -1,6 +1,7 @@
 import { html } from "hono/html";
 import type { MessageRow } from "../../core/messages";
 import type { ReplyRow } from "../../core/replies";
+import { confirmAction } from "./layout";
 
 /** Everything from the message is interpolated through html``, which escapes it. Never use raw() here. */
 export function detailView(m: MessageRow, replies: ReplyRow[], imageUrls: string[], statuses: string[], csrf: string) {
@@ -44,10 +45,12 @@ export function detailView(m: MessageRow, replies: ReplyRow[], imageUrls: string
     </form>
     ${m.user_ref
       ? html`<hr />
-          <form method="post" action="/m/${m.id}/delete-user">
-            <input type="hidden" name="csrf" value="${csrf}" />
-            <button class="warn">Delete all data for this user_ref</button>
-            <small>Deletes every message, reply and image of this user in this app. Irreversible.</small>
-          </form>`
+          ${confirmAction(
+            "confirm-delete-user",
+            "Delete all data for this user_ref",
+            `Delete every message, reply and image of this user in ${m.app}? This cannot be undone.`,
+            `/m/${m.id}/delete-user`,
+            csrf,
+          )}`
       : ""}`;
 }

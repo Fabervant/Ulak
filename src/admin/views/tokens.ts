@@ -1,5 +1,6 @@
 import { html } from "hono/html";
 import type { AdminTokenRow } from "../../core/auth/admintoken";
+import { confirmAction } from "./layout";
 
 export function tokensView(tokens: AdminTokenRow[], csrf: string, created?: { name: string; token: string }) {
   return html`${created
@@ -17,7 +18,7 @@ export function tokensView(tokens: AdminTokenRow[], csrf: string, created?: { na
           <td>
             ${t.revoked_at
               ? ""
-              : html`<form method="post" action="/tokens/${t.id}/revoke"><input type="hidden" name="csrf" value="${csrf}" /><button>Revoke</button></form>`}
+              : confirmAction(`revoke-${t.id}`, "Revoke", `Revoke the token ${t.name}? Whatever uses it loses access at once.`, `/tokens/${t.id}/revoke`, csrf)}
           </td>
         </tr>`,
       )}

@@ -1,5 +1,6 @@
 import { html } from "hono/html";
 import type { AppRow } from "../../core/apps";
+import { confirmAction } from "./layout";
 
 /** `newKey` is shown once: the app key goes in the app's config, the notice key on its server only. */
 export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; key: string; notice?: boolean }) {
@@ -26,8 +27,8 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
             </form>
           </td>
           <td>
-            <form method="post" action="/apps/${a.id}/rotate"><input type="hidden" name="csrf" value="${csrf}" /><button>Rotate key</button></form>
-            <form method="post" action="/apps/${a.id}/notice-key"><input type="hidden" name="csrf" value="${csrf}" /><button>New notice key</button></form>
+            ${confirmAction(`rotate-${a.id}`, "Rotate key", `Rotate the key of ${a.id}? Its current key stops working at once, until the app's config holds the new one.`, `/apps/${a.id}/rotate`, csrf)}
+            ${confirmAction(`notice-${a.id}`, "New notice key", `Make a new notice key for ${a.id}? Its current notice key stops working at once.`, `/apps/${a.id}/notice-key`, csrf)}
             ${a.has_notice_key ? "notice key set" : "no notice key"}
           </td>
         </tr>`,

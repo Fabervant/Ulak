@@ -349,6 +349,28 @@ describe("sign-out leaves the browser a stranger", () => {
       }
     }
   });
+  it("every action that destroys or cuts off asks first: its form sits only in a dialog a link opens", async () => {
+    const m = (await insertMessage(env.DB, mk(), "pending")).row;
+    const t = await createAdminToken(env.DB, "laptop");
+    const pages: [string, string[]][] = [
+      [`/m/${m.id}`, [`/m/${m.id}/delete-user`, "/auth/logout-all"]],
+      ["/apps", ["/apps/demo/rotate", "/apps/demo/notice-key"]],
+      ["/tokens", [`/tokens/${t.id}/revoke`]],
+    ];
+    for (const [path, actions] of pages) {
+      const page = await (await req(path)).text();
+      const dialogs = [...page.matchAll(/<section class="dialog" id="([^"]+)"[^>]*>([\s\S]*?)<\/section>/g)];
+      for (const action of actions) {
+        // The one form that posts it, inside a dialog with a question, opened by a link on the same page.
+        expect(page.split(`action="${action}"`).length - 1, `${path} ${action}`).toBe(1);
+        const dialog = dialogs.find(([, , inner]) => inner!.includes(`action="${action}"`));
+        expect(dialog, `${path} ${action}`).toBeDefined();
+        expect(dialog![2], `${path} ${action}`).toMatch(/<p [^>]*>[^<]+\?/);
+        expect(page, `${path} ${action}`).toContain(`href="#${dialog![1]}"`);
+        expect(dialog![2], `${path} ${action}`).toContain('href="#"');
+      }
+    }
+  });
 
   it("the callback consumes the OAuth state cookie whether the exchange succeeds or fails", async () => {
     // No state cookie, or a state it does not match, is a request the cookie did not authorise:
