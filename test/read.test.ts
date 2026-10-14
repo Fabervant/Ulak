@@ -113,9 +113,10 @@ describe("GET /v1/messages", () => {
     expect(same.messages).toHaveLength(0);
     expect(same.cursor).toBe(first.cursor);
   });
-  it("ETag and 304", async () => {
+  it("ETag and 304; a read is no-store, so no cache keeps one user's messages", async () => {
     await insertMessage(env.DB, mk(), "pending");
     const r1 = await get(`user_ref=${U}`);
+    expect(r1.headers.get("cache-control")).toBe("no-store");
     const etag = r1.headers.get("etag")!;
     expect(etag).toBeTruthy();
     const r2 = await get(`user_ref=${U}`, { "if-none-match": etag });

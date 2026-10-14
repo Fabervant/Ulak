@@ -129,6 +129,8 @@ in the message's locale, English fallback), `message`, and `replies` (each `id`,
   last one's `last_activity_at`, so that following `cursor` never skips one. The response carries
   `cursor`, the largest `last_activity_at` returned, or the request's `since` when nothing changed.
 - `ETag` is derived from the result. A matching `If-None-Match` returns `304`.
+- The response is `Cache-Control: no-store`: no browser or proxy cache keeps a user's messages,
+  so signing out of the client app leaves none of them on the device.
 - An unknown `user_ref` returns an empty list with `200`, never an error.
 - Minimum poll interval is 60 seconds per `user_ref`. Faster polling gets `429` with
   `Retry-After`, never a silent empty list.

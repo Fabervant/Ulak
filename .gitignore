@@ -19,3 +19,9 @@ test/hygiene-manifest.json
 
 # Local session state, not part of the project
 memory/
+
+# Operator credentials, kept inside the root and never committed
+.secrets/
+
+# Scratch files of a session, inside the root
+tmp/
