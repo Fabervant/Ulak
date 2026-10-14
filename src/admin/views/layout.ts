@@ -18,14 +18,14 @@ a.button{display:inline-block;padding:.35rem .8rem;border:1px solid #8f959e;bord
 
 /** An action that destroys or cuts something off asks first: its button opens a dialog over the
  *  dimmed, blurred page, and only the dialog's own button posts. CSS `:target` opens it, since the
- *  CSP allows no script; Cancel clears the fragment. `id` must be unique on the page. */
+ *  CSP allows no script; Cancel targets a fragment nothing has, so the page keeps its scroll. `id` must be unique on the page. */
 export function confirmAction(id: string, label: string, question: string, action: string, csrf: string) {
   return html`<a class="button warn" href="#${id}">${label}</a>
-    <section class="dialog" id="${id}" role="dialog" aria-modal="true" aria-labelledby="${id}-q">
+    <section class="dialog" id="${id}" role="dialog" aria-labelledby="${id}-q">
       <div class="box">
         <p id="${id}-q">${question}</p>
         <form class="actions" method="post" action="${action}">
-          <input type="hidden" name="csrf" value="${csrf}" /><a href="#">Cancel</a><button class="warn">${label}</button>
+          <input type="hidden" name="csrf" value="${csrf}" /><a href="#_">Cancel</a><button class="warn">${label}</button>
         </form>
       </div>
     </section>`;

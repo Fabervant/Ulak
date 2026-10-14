@@ -359,7 +359,12 @@ describe("sign-out leaves the browser a stranger", () => {
     ];
     for (const [path, actions] of pages) {
       const page = await (await req(path)).text();
+      // Shut until its link targets it, and one id per dialog, or a link opens another action's dialog.
+      expect(page).toContain(".dialog{display:none;");
+      expect(page).toContain(".dialog:target{display:flex}");
       const dialogs = [...page.matchAll(/<section class="dialog" id="([^"]+)"[^>]*>([\s\S]*?)<\/section>/g)];
+      const ids = dialogs.map(([, id]) => id);
+      expect(new Set(ids).size, `${path} ${ids}`).toBe(ids.length);
       for (const action of actions) {
         // The one form that posts it, inside a dialog with a question, opened by a link on the same page.
         expect(page.split(`action="${action}"`).length - 1, `${path} ${action}`).toBe(1);
@@ -367,7 +372,8 @@ describe("sign-out leaves the browser a stranger", () => {
         expect(dialog, `${path} ${action}`).toBeDefined();
         expect(dialog![2], `${path} ${action}`).toMatch(/<p [^>]*>[^<]+\?/);
         expect(page, `${path} ${action}`).toContain(`href="#${dialog![1]}"`);
-        expect(dialog![2], `${path} ${action}`).toContain('href="#"');
+        // Cancel names a fragment nothing has, so it closes without scrolling to the top.
+        expect(dialog![2], `${path} ${action}`).toContain('href="#_"');
       }
     }
   });

@@ -174,7 +174,10 @@ ends them. It does not revoke admin API tokens, which are revoked one by one on 
 
 The admin surface is English only. Its screens: message list, message detail (reply, set status,
 delete the sender's data), apps (create, rotate key, edit retention, images, origins), tokens
-(create and revoke admin API tokens).
+(create and revoke admin API tokens). An action that destroys data or cuts something off (delete
+the sender's data, rotate a key, issue a new notice key, revoke a token, sign out everywhere)
+asks first in a dialog over the dimmed, blurred page; only the dialog's own button posts. The
+dialog is pure CSS, since the surface runs no script.
 
 ## 7. Images
 
