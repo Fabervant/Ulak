@@ -240,7 +240,10 @@ describe("admin surface", () => {
     const shown = async (session: string, sealed: string, path = "/apps") => {
       const res = await req(path, { headers: { cookie: `ulak_admin=${session}; ulak_reveal=${sealed}` } });
       expect(cleared(res, "ulak_reveal", "/"), sealed).toBeDefined();
-      return secret.test(await res.text());
+      // Either page renders only its own field, so a cookie opened on the other page shows an empty
+      // reveal box rather than the secret: any reveal at all counts as shown.
+      const text = await res.text();
+      return secret.test(text) || /shown once/.test(text);
     };
     expect(await shown(cookie, value)).toBe(true);
     expect(await shown(other, value)).toBe(false);
