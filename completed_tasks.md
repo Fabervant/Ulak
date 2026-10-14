@@ -1,5 +1,51 @@
 # Completed tasks
 
+## Session 10 — 2026-10-14
+
+Mailbox (10 letters), refactor round 1 on `src/api/index.ts`, the Session 9 deploy with a live
+probe, confirm dialogs on the five destructive admin actions (deployed), the credentials moved
+inside the root.
+
+- **Mailbox.** Ten letters, all acted on and archived; answered live to FabervantOps.
+  - GA / 31 countries, statistics box, sign-in standard (document, section 11), standards rollout,
+    footer layout: no surface. Ulak has no public UI, and the operator panel is Google-only by
+    redirect. FabervantOps agreed: no footer, card or sign-in standard applies.
+  - Legal name: `LICENSE` reads "Fabervant Teknoloji Anonim Şirketi". FabervantOps approved it,
+    the owner approved the push. The dated 2026-09-05 plan was left as history. The live
+    `CONTROLLER_NAME` setting also carried the short form; it was changed and read back from the
+    deployed version. No code reads it today; it names the controller for the privacy template.
+  - Forms inventory sent: every admin form is inline on a full page. Five destructive actions
+    posted on one click.
+  - Code ruling sweep: 0 owner-credited values (`docs/audits/2026-10-14-owner-ruling-sweep.md`).
+  - No folder outside the root. Owner's choice: move everything. Ten credential files went from
+    his Desktop store into `.secrets/` (git-ignored), with matching SHA-256. GRIDIGMA confirmed
+    nothing of theirs reads the old path; the emptied Desktop folder is his and stays.
+    `tmp/` is git-ignored for session scratch.
+- **Refactor round 1, `src/api/index.ts`, CLOSED** (`05d15d9`). There was 1 defect, which
+  mattered: the read's `no-store` header was unpinned. It is now pinned in the ETag test, red with
+  the header removed. Spec section 5 states it, because a cached thread would survive sign-out.
+  The verify pass found nothing.
+- **Observations O11-O17.** O11, O13 and O16 were already pinned by `5e10a29`; mutation re-runs
+  turned them red. O12 was a real gap: the page binding of the reveal cookie stayed green with
+  the check removed. Fixed in `7461890`. O14 and O15 were already in `skipped_issues.md`. O17 is
+  covered by the spec line.
+- **Deploy of `a5e7969`..`7461890`** (owner approved). Live probe with throwaway app `probe-s10`:
+  - three submits;
+  - a read without `since`: oldest first, `no-store`, correct cursor;
+  - a `since` written `+03:00` without milliseconds read the same three rows.
+  The owner rotated its key in the panel and refreshed. The key hash changed once, and the old
+  key now answers 401. The app and its rows were deleted and read back at zero; two real apps
+  remain. GRIDIGMA was told live; TEGlyx by letter, for its one live read.
+- **Confirm dialogs** (owner: all five; `60fe68c`, `112751b`, deployed). Delete user data,
+  Rotate key, New notice key, Revoke and Sign out everywhere each open a dialog over the dimmed,
+  blurred page, and only its own button posts. It is pure CSS `:target`, because the panel's CSP
+  allows no script. Cancel targets `#_` so the page keeps its scroll. The header wraps at phone
+  width. Screenshots were taken before the deploy, and the owner confirmed the live dialog
+  matches. Independent review found 0 defects and 2 test gaps; both are closed (always-visible
+  dialog, duplicate ids), each red under its mutation. Escape-to-close and history entries were
+  left out, as they need script.
+- 266 to 268 tests. Commits `4db1cd7`, `05d15d9`, `7461890`, `60fe68c`, `112751b`.
+
 ## Session 9 — 2026-10-11
 
 Mailbox, refactor round 2 on the admin panel, refresh-safe key display, and the user message list
