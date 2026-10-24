@@ -6,7 +6,7 @@ const ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
 const JWKS_URL = new URL("https://www.googleapis.com/oauth2/v3/certs");
 let jwks: JWTVerifyGetKey | undefined;
 
-export function authUrl(env: Env, state: string, nonce: string, redirectUri: string): string {
+export function authUrl(env: Env, state: string, nonce: string, challenge: string, redirectUri: string): string {
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID ?? "");
   u.searchParams.set("redirect_uri", redirectUri);
@@ -14,16 +14,19 @@ export function authUrl(env: Env, state: string, nonce: string, redirectUri: str
   u.searchParams.set("scope", "openid email");
   u.searchParams.set("state", state);
   u.searchParams.set("nonce", nonce);
+  u.searchParams.set("code_challenge", challenge);
+  u.searchParams.set("code_challenge_method", "S256");
   u.searchParams.set("prompt", "select_account");
   return u.toString();
 }
 
-export async function exchangeCode(env: Env, code: string, redirectUri: string, fetchImpl: typeof fetch = defaultFetch): Promise<{ id_token: string }> {
+export async function exchangeCode(env: Env, code: string, verifier: string, redirectUri: string, fetchImpl: typeof fetch = defaultFetch): Promise<{ id_token: string }> {
   const res = await fetchImpl("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
+      code_verifier: verifier,
       client_id: env.GOOGLE_CLIENT_ID ?? "",
       client_secret: env.GOOGLE_CLIENT_SECRET ?? "",
       redirect_uri: redirectUri,

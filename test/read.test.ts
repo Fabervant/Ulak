@@ -90,6 +90,9 @@ describe("GET /v1/messages", () => {
     // 03:00:01+03:00 is 00:00:01Z, so the messages one and two seconds later follow it.
     const j = await (await get(`user_ref=${U}&since=${encodeURIComponent("2026-01-01T03:00:01+03:00")}`)).json<Listed>();
     expect(j.messages.map((m) => m.id)).toEqual(["s-0002", "s-0003"]);
+    // Digits below a millisecond are cut, and the strict comparison still keeps the 00:00:01.000 message out.
+    const sub = await (await get(`user_ref=${U}&since=${encodeURIComponent("2026-01-01T00:00:01.0005Z")}`)).json<Listed>();
+    expect(sub.messages.map((m) => m.id)).toEqual(["s-0002", "s-0003"]);
   });
 
   it("since cursor returns only newer activity; unknown user_ref is an empty 200", async () => {

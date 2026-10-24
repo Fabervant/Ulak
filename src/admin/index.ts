@@ -10,7 +10,7 @@ import { detailView } from "./views/detail";
 import { appsView } from "./views/apps";
 import { tokensView } from "./views/tokens";
 import { authUrl, exchangeCode, verifyIdToken } from "../core/auth/google";
-import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, clearOauthCookie, REVEAL_COOKIE, sealReveal, openReveal, revealCookie, clearRevealCookie } from "../core/auth/session";
+import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, newPkce, clearOauthCookie, REVEAL_COOKIE, sealReveal, openReveal, revealCookie, clearRevealCookie } from "../core/auth/session";
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
@@ -67,21 +67,22 @@ app.get("/status/:secret", async (c) => {
 // Google refuses the code exchange unless it names the same address the sign-in was sent from.
 const callbackUrl = (env: Env) => `${env.ADMIN_URL}/auth/callback`;
 
-app.get("/auth/login", (c) => {
+app.get("/auth/login", async (c) => {
   const state = crypto.randomUUID();
   const nonce = crypto.randomUUID();
-  c.header("set-cookie", oauthCookie(state, nonce));
-  return c.redirect(authUrl(c.env, state, nonce, callbackUrl(c.env)), 302);
+  const { verifier, challenge } = await newPkce();
+  c.header("set-cookie", oauthCookie(state, nonce, verifier));
+  return c.redirect(authUrl(c.env, state, nonce, challenge, callbackUrl(c.env)), 302);
 });
 
 app.get("/auth/callback", async (c) => {
-  const [state, nonce] = (getCookie(c, OAUTH_COOKIE) ?? "").split(".");
+  const [state, nonce, verifier] = (getCookie(c, OAUTH_COOKIE) ?? "").split(".");
   const code = c.req.query("code");
-  if (!state || !nonce || c.req.query("state") !== state || !code) return c.text("sign-in state mismatch; start again at /auth/login", 400);
+  if (!state || !nonce || !verifier || c.req.query("state") !== state || !code) return c.text("sign-in state mismatch; start again at /auth/login", 400);
   // The state matched, so it is spent whatever happens next; the header survives an error response.
   c.header("set-cookie", clearOauthCookie());
   if (!c.env.SESSION_SECRET) return c.text("SESSION_SECRET not configured", 500);
-  const { id_token } = await exchangeCode(c.env, code, callbackUrl(c.env));
+  const { id_token } = await exchangeCode(c.env, code, verifier, callbackUrl(c.env));
   const who = await verifyIdToken(c.env, id_token, nonce);
   const admin = await bootstrapAdmin(c.env.DB, c.env, who.sub, who.email, who.email_verified); // 403 not_an_admin otherwise
   c.header("set-cookie", sessionCookie(await createSession(c.env.SESSION_SECRET, admin.sub)), { append: true });

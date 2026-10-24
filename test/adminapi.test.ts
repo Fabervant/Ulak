@@ -44,6 +44,14 @@ describe("admin API", () => {
     expect((await call(`/api/messages/${crypto.randomUUID()}`)).status).toBe(404);
     expect((await call("/api/messages?since=nope")).status).toBe(400);
   });
+  it("since names an instant: without milliseconds or with an offset it reads the same rows", async () => {
+    const [id] = await seedMessages(1, "2026-01-01T00:00:00.500Z");
+    // Both name 00:00:00Z, half a second before the message; compared as text they sort after it.
+    for (const since of ["2026-01-01T00:00:00Z", "2026-01-01T03:00:00+03:00"]) {
+      const list = await (await call(`/api/messages?since=${encodeURIComponent(since)}`)).json<{ messages: Array<{ id: string }> }>();
+      expect(list.messages.map((m) => m.id), since).toEqual([id]);
+    }
+  });
   it("lists more messages than one statement may bind, with their reply and image counts", async () => {
     const ids = await seedMessages(150, nowIso());
     await addReply(env.DB, ids[0]!, "owner", "first");

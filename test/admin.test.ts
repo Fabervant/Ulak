@@ -68,8 +68,10 @@ async function googleSignsIn(nonce: string, sub = "sub-1", email = "a@example.in
   // jose fetches the key set through the global fetch, not through Ulak's transport.
   vi.stubGlobal("fetch", vi.fn(async () => json({ keys: [jwk] })));
 }
+const VERIFIER = "v".repeat(43);
 const callback = (state: string, nonce: string, queryState = state, adminEnv: typeof env = E) =>
-  req(`/auth/callback?state=${queryState}&code=c1`, { headers: { cookie: `ulak_oauth=${state}.${nonce}` } }, null, adminEnv);
+  req(`/auth/callback?state=${queryState}&code=c1`, { headers: { cookie: `ulak_oauth=${state}.${nonce}.${VERIFIER}` } }, null, adminEnv);
+const b64url = (bytes: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(bytes))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 
 beforeEach(async () => {
   outbound.mockReset();
@@ -96,12 +98,25 @@ describe("admin surface", () => {
     const pair = async () => {
       const r = await req("/auth/login", {}, null);
       const q = new URL(r.headers.get("location")!).searchParams;
-      expect(r.headers.get("set-cookie")).toContain(`ulak_oauth=${q.get("state")}.${q.get("nonce")};`);
+      expect(r.headers.get("set-cookie")).toContain(`ulak_oauth=${q.get("state")}.${q.get("nonce")}.`);
       return [q.get("state"), q.get("nonce")];
     };
     const [a, b] = [await pair(), await pair()];
     expect(a[0]).not.toBe(b[0]);
     expect(a[1]).not.toBe(b[1]);
+  });
+  it("login sends Google a PKCE S256 challenge whose verifier only the state cookie holds", async () => {
+    const res = await req("/auth/login", {}, null);
+    const q = new URL(res.headers.get("location")!).searchParams;
+    const [state, nonce, verifier] = res.headers.get("set-cookie")!.split(";")[0]!.slice("ulak_oauth=".length).split(".");
+    expect([state, nonce]).toEqual([q.get("state"), q.get("nonce")]);
+    // RFC 7636: 43 to 128 unreserved characters; ours is base64url of 32 random bytes.
+    expect(verifier).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(q.get("code_challenge_method")).toBe("S256");
+    expect(q.get("code_challenge")).toBe(b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))));
+    expect(res.headers.get("location")).not.toContain(verifier!);
+    const again = (await req("/auth/login", {}, null)).headers.get("set-cookie")!.split(";")[0]!.split(".")[2];
+    expect(again).not.toBe(verifier);
   });
   it("lists messages grouped by app with pending counts and escapes content", async () => {
     await insertMessage(env.DB, mk(), "pending");
@@ -349,6 +364,12 @@ describe("sign-out leaves the browser a stranger", () => {
       }
     }
   });
+  it("a dialog's question shows a name it quotes as text, never as markup", async () => {
+    await createAdminToken(env.DB, "<b>x</b>");
+    const page = await (await req("/tokens")).text();
+    expect(page).toContain("Revoke the token &lt;b&gt;x&lt;/b&gt;?");
+    expect(page).not.toContain("<b>x</b>");
+  });
   it("every action that destroys or cuts off asks first: its form sits only in a dialog a link opens", async () => {
     const m = (await insertMessage(env.DB, mk(), "pending")).row;
     const t = await createAdminToken(env.DB, "laptop");
@@ -388,7 +409,9 @@ describe("sign-out leaves the browser a stranger", () => {
     // A state cookie without its nonce would let a token without one through; no code has nothing to exchange.
     const noNonce = await req("/auth/callback?state=s0&code=c1", { headers: { cookie: "ulak_oauth=s0" } }, null);
     const noCode = await req("/auth/callback?state=s0", { headers: { cookie: "ulak_oauth=s0.n0" } }, null);
-    for (const res of [noNonce, noCode]) {
+    // Google would refuse the code without the PKCE verifier; Ulak refuses it first.
+    const noVerifier = await req("/auth/callback?state=s0&code=c1", { headers: { cookie: "ulak_oauth=s0.n0" } }, null);
+    for (const res of [noNonce, noCode, noVerifier]) {
       expect(res.status).toBe(400);
       expect(res.headers.getSetCookie()).toHaveLength(0);
     }
@@ -414,6 +437,8 @@ describe("sign-out leaves the browser a stranger", () => {
     const sentBackTo = new URL((await req("/auth/login", {}, null)).headers.get("location")!).searchParams.get("redirect_uri");
     expect(sentBackTo).toBe(`${E.ADMIN_URL}/auth/callback`);
     expect((outbound.mock.calls[1]![1]!.body as URLSearchParams).get("redirect_uri")).toBe(sentBackTo);
+    // The exchange proves it continues the sign-in that started here: it carries the cookie's verifier.
+    expect((outbound.mock.calls[1]![1]!.body as URLSearchParams).get("code_verifier")).toBe(VERIFIER);
   });
 
   it("a Google account that is not an admin is refused with a logged 403 and gets no session", async () => {

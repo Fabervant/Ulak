@@ -8,7 +8,7 @@ import { insertMessage, findByIdempotency, bodyHash, listForUser, deleteUser } f
 import { listRepliesFor } from "../core/replies";
 import { statusLabel } from "../core/locales";
 import { sha256Hex } from "../core/ids";
-import { isIso } from "../core/time";
+import { isIso, storedIso } from "../core/time";
 import { MemoryRateLimiter, limiterFor, enforce, SUBMIT_BURST_LIMIT, SUBMIT_HOURLY_LIMIT } from "../core/ratelimit";
 import { clientIp } from "../core/clientip";
 import { addMinutes, nowIso } from "../core/time";
@@ -162,8 +162,7 @@ app.get("/v1/messages", requireAppKey(), async (c) => {
   const user_ref = userRefParam(c.req.query("user_ref"));
   const sinceRaw = c.req.query("since") ?? null;
   if (sinceRaw !== null && !isIso(sinceRaw)) throw new ApiError(400, "invalid_request", "since must be ISO 8601", false, { field: "since" });
-  // Stored times are UTC with milliseconds and compared as text, so the cursor is written the same way.
-  const since = sinceRaw === null ? null : new Date(sinceRaw).toISOString();
+  const since = sinceRaw === null ? null : storedIso(sinceRaw);
   const limiters = [{ limiter: limiterFor(c.env.RL_READ_USER, memReadUser), key: `r:${tenant.id}:${user_ref}` }];
   if (c.env.READ_IP_BACKSTOP === "true") limiters.push({ limiter: memReadIp, key: `rip:${clientIp(c.req.raw, c.env)}` });
   await enforce(limiters, 60);

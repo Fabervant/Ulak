@@ -10,7 +10,7 @@ import { placeholders, slices } from "../core/sql";
 import { signImageUrl } from "../core/signedurl";
 import { runChecks } from "../core/checks";
 import { listApps } from "../core/apps";
-import { isIso, nowSec } from "../core/time";
+import { isIso, nowSec, storedIso } from "../core/time";
 
 export const api = new Hono<{ Bindings: Env; Variables: AdminTokenVars }>();
 
@@ -34,7 +34,7 @@ api.get("/messages", async (c) => {
   const rows = await listAdmin(c.env.DB, {
     app: c.req.query("app") || undefined,
     status: c.req.query("status") || undefined,
-    sinceIso: since || undefined,
+    sinceIso: since ? storedIso(since) : undefined,
     limit: Number(c.req.query("limit") || 100),
   });
   const replies = await listRepliesFor(c.env.DB, rows.map((r) => r.id));

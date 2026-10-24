@@ -21,8 +21,11 @@ describe("session", () => {
 });
 
 describe("google", () => {
-  it("authUrl carries client id, redirect, state, nonce and openid email scope", () => {
-    const u = new URL(authUrl(env, "st", "no", "https://admin.example.invalid/auth/callback"));
+  it("authUrl carries client id, redirect, state, nonce, PKCE challenge and openid email scope", () => {
+    const u = new URL(authUrl(env, "st", "no", "ch", "https://admin.example.invalid/auth/callback"));
+    expect(u.searchParams.get("response_type")).toBe("code");
+    expect(u.searchParams.get("code_challenge")).toBe("ch");
+    expect(u.searchParams.get("code_challenge_method")).toBe("S256");
     expect(u.origin + u.pathname).toBe("https://accounts.google.com/o/oauth2/v2/auth");
     expect(u.searchParams.get("client_id")).toBe("test-client-id");
     expect(u.searchParams.get("scope")).toBe("openid email");

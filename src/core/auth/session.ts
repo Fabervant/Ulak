@@ -64,12 +64,18 @@ export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
-/** The sign-in state cookie: one state and nonce, scoped to the auth routes, spent by the callback. */
+/** The sign-in state cookie: one state, nonce and PKCE verifier, scoped to the auth routes, spent by the callback. */
 export const OAUTH_COOKIE = "ulak_oauth";
 export const OAUTH_TTL_SEC = 600;
 
-export function oauthCookie(state: string, nonce: string): string {
-  return `${OAUTH_COOKIE}=${state}.${nonce}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${OAUTH_TTL_SEC}`;
+export function oauthCookie(state: string, nonce: string, verifier: string): string {
+  return `${OAUTH_COOKIE}=${state}.${nonce}.${verifier}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${OAUTH_TTL_SEC}`;
+}
+
+/** PKCE S256 (RFC 7636): the verifier stays in the state cookie; Google is sent only its hash. */
+export async function newPkce(): Promise<{ verifier: string; challenge: string }> {
+  const verifier = b64u(crypto.getRandomValues(new Uint8Array(32)));
+  return { verifier, challenge: b64u(await crypto.subtle.digest("SHA-256", enc.encode(verifier))) };
 }
 
 /** Same Path as the setter, or the browser keeps the original. */
