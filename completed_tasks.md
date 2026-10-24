@@ -1,5 +1,54 @@
 # Completed tasks
 
+## Session 11 — 2026-10-24
+
+Maintenance session: mailbox (17 letters), drift review, refactor round 3 and the feature review,
+PKCE on the admin sign-in (deployed), the admin API `since` fix (deployed), and draft 1 of the
+communication-service specification by the owner's new brief.
+
+- **Mailbox.** 17 letters arrived (13 at the start, 4 during the session); 16 acted on and
+  archived, the session-ledger letter closes with this wrap-up's commit.
+  - Nothing for Ulak (checked with `git grep`): the Codex/Hermes ruling, ads measure-only, the
+    native Google exception, Paddle in Türkiye, `tmp/` already ignored.
+  - Home Index line (three letters): Ulak has no public screen; FabervantOps agreed, no feed.
+  - Open orders: `## Owner's open orders` created in MEMORY.md, seeded from every recorded prompt
+    and pop-up answer (the drift review's reading).
+  - PKCE: built and deployed (below), commit sent to FabervantOps.
+  - Türkiye documents (FabervantOps S248, GRIDIGMA S556) and "can Ulak send every app's mails":
+    the smallest version was put to the owner; he stopped the question and gave a new brief (below).
+- **Owner's brief** (his words): "you don't need to build the smallest version. That was the brief
+  for GRIDIGMA, because it's not its core business - I mean communication. Yet, it is yours. You
+  can build a capable software. My priority is that it will handle all the external communication
+  of all our apps. The apps will build their bridges but you will handle the incoming and outgoing
+  communication." Then: "We need to prepare a specification for the new features first. ...
+  Please ask them to give you feedback so that you can prepare the specification. Then submit it
+  to them for their initial review. For final version, come back to me for approval."
+  - Feedback asked of GRIDIGMA and FabervantOps; both answered (GRIDIGMA twice: facts and an
+    unbiased view). The seven other mail-sending apps were asked by letter for their extras.
+  - FabervantOps relayed the owner's scope ruling: people outside the company only; agent messages
+    and the company mailbox are not Ulak's.
+  - A reader agent went through the first client's mail code (17 kinds of mail) and its 32
+    never-shipped Türkiye patches for lessons (`tmp/comms-research.md`, not tracked).
+  - Draft 1 written and sent to both for the initial review:
+    `docs/specs/2026-10-24-communication-service.md` (`fef3b6c`). GRIDIGMA's review arrived at wrap-up
+    and waits in the mailbox for draft 2.
+- **Drift review** (maintenance session): no contradictions in sessions 1-10
+  (`docs/drift-reviews/review-2026-10-24-up-to-10.md`). The rule-file audit was approved by the
+  owner ("Apply all"): six MEMORY lines deleted (each owned by a test, a topic file, the code or the
+  refactor hook), Open decisions trimmed. Ruling replay: 0 owner-credited values.
+- **Refactor round 3, `src/admin/index.ts`, CLOSED** with 0 defects (13 breaks, 4 green, none
+  harmful). Feature review of `0886129..b8ee5be`: 0 findings, 3 observations, all answered:
+  O18 dialog question escaping pinned; O19 sub-millisecond `since` pinned (the signed-year case
+  cannot pass `isIso`); O20 was a real bug - the admin JSON API compared `since` as raw text, so
+  an offset or millisecond-less value skipped messages; fixed with the shared `storedIso`.
+- **PKCE S256 on the admin Google sign-in** (`0e18799`), letter of FabervantOps S235: verifier in
+  the state cookie, challenge to Google, verifier on the exchange, a callback without one refused.
+  Red tests first; an independent review found 0 defects with 5 planted breaks all red.
+  Deployed (owner's approval); live: S256 challenge sent, verifier absent from the URL, 400
+  without a verifier, Google accepts the request. The owner's own sign-in was asked for as the
+  last proof.
+- 268 to 271 tests. Commits `0e18799`, `fef3b6c`.
+
 ## Session 10 — 2026-10-14
 
 Mailbox (10 letters), refactor round 1 on `src/api/index.ts`, the Session 9 deploy with a live
