@@ -29,7 +29,20 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
     names: none.
 - Letters: FabervantOps (re-read `cd15ec1`, source links, ask for the plain-text durable-medium read
   before the final version); GRIDIGMA (four app-side changes; asked for AGREED).
-- No code changed. Commit `cd15ec1`.
+- After the first wrap-up, two more letters, both acted on and archived:
+  - GRIDIGMA S565: draft 3 AGREED with one change: its sale event comes from a subscription service,
+    not the payment provider, so 5.4's wait cap and look-back now come from each app's own sale-event
+    sender (`62f5353`). Read in that service's webhook documentation: 60 s timeout, 5 retries over
+    about 80 minutes. Told GRIDIGMA and FabervantOps.
+  - FabervantOps S256 review of `cd15ec1`: N1-N7 closed; one medium (N-A: `held` could not be in the
+    `202`, because a legal call is answered before the first attempt) and nine low items, all fixed
+    as written (`fdcb269`): `held` is now a stored state; Ulak sets Reply-To; `html` carries no
+    images; option 0 says a bounced legal document is never detected and Ulak never uses the owner's
+    own login secret; only the legal call inside the sale handler; remedy path for a held document.
+    Its durable-medium read accepts plain text on three conditions, now in 5.4, read 11 and decision 2
+    (no longer conditional). Re-read asked at `fdcb269`, with option 0's daily limit and Apple relay
+    question; GRIDIGMA told of three app-side lines.
+- No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`.
 
 ## Session 12 — 2026-10-28
 
