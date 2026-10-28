@@ -1,6 +1,6 @@
 # Ulak as the communication service - specification (DRAFT 3, for the re-read of changes)
 
-Status: draft 3, 2026-10-28 (Session 13). Draft 1 (2026-10-24) was reviewed by the first client application and by
+Status: draft 3, 2026-10-28 (Session 13; 5.4 amended at the first client's request). Draft 1 (2026-10-24) was reviewed by the first client application and by
 company operations; draft 2 (`22664db`) was agreed by the first client with three notes and reviewed again by
 operations (NOT YET: 2 high, 5 medium, 14 low; all 15 draft-1 findings closed). Draft 3 answers that second review.
 Two of the other mail-sending apps have not answered the question "what do you send and receive". Next: operations
@@ -147,8 +147,8 @@ Answers:
 
 - Every accepted mail goes into the outbox and is tried at once. For `transactional`, the call waits for that first
   attempt for at most about 8 seconds and answers `sent` or `queued`. For `legal_document`, the call answers as soon as
-  the copy is stored (`queued`) and the first attempt runs right after, so the answer comes well inside the payment
-  provider's webhook timeout (5.4). A queued mail is retried with backoff by a 5-minute timer until it is sent or its
+  the copy is stored (`queued`) and the first attempt runs right after, so the answer comes well inside the
+  timeout of whatever sends the app its sale event (5.4). A queued mail is retried with backoff by a 5-minute timer until it is sent or its
   `expires_at` passes; then it is given up. A stale mail (a link already dead) is therefore never sent late, at night or
   in a burst.
 - Its body and plain address are deleted when the vendor accepts it or when it is given up, except a legal document's
@@ -192,15 +192,21 @@ date, plan and price:
   reference. The app owns the text and its legal review; Ulak stores no templates and takes every figure as given
   (amounts and tax exactly as the payment provider stated them); it never fills, computes or infers anything. The app
   calls only once it has the figures and the accepted version.
-- **How the app calls** (the same for every selling app): inside its handling of the payment provider's sale event. The
-  provider expects an answer within 5 seconds and re-delivers a failed event for about two days (its webhook
-  documentation, read 2026-10-28). The app caps its wait for Ulak at 4 seconds; if Ulak does not answer `202` in that
-  time, the app answers the webhook with an error, so the provider delivers the event again, and the `idempotency_key`
-  (the sale's id) keeps it to one mail. A timeout counts as "no `202`" and is safe for the same reason. The app does not
-  mark the sale processed before Ulak's `202`. From the `202` on, Ulak's record is the durable record of the duty.
-- **Daily reconciliation** (each selling app): an Ulak outage longer than the provider's re-delivery window would
-  otherwise lose the duty silently. Once a day the app reads the provider's completed sales of the last 3 days (the
-  two-day window plus a day) and calls `POST /v1/mail` again for each with the same `idempotency_key`: an accepted one
+- **How the app calls** (the same for every selling app): inside its handling of the sale event, from whichever service
+  delivers that event to the app (the payment provider itself, or a subscription service between the app and its
+  payment rails). The numbers come from that sender's own webhook terms, read for each app before its phase 1: the app
+  caps its wait for Ulak below the sender's timeout (for example, one payment provider wants an answer within 5
+  seconds, so about 4; one subscription service waits 60 seconds); if Ulak does not answer `202` in that time, the app
+  answers the webhook with an error, so the sender delivers the event again, and the `idempotency_key` (the sale's id)
+  keeps it to one mail. A timeout counts as "no `202`" and is safe for the same reason. The app does not mark the sale
+  processed before Ulak's `202`. From the `202` on, Ulak's record is the durable record of the duty. (Webhook terms
+  read 2026-10-28: the payment provider re-delivers for about two days; the subscription service retries 5 times over
+  about 80 minutes.)
+- **Daily reconciliation** (each selling app): an Ulak outage longer than the sender's re-delivery window would
+  otherwise lose the duty silently. Once a day the app reads the completed sales (from the payment provider or the
+  subscription service) for a look-back of the sender's re-delivery window plus a day (for example 3 days for the
+  provider's two days; 1 day and 2 hours for a window of 80 minutes), and calls `POST /v1/mail` again for each with
+  the same `idempotency_key`: an accepted one
   returns its first result and sends nothing; a missing one is sent, and the app pings the owner that it was missed. A
   sale with no linked acceptance is never called and is listed in the owner ping as an alert, never skipped. If the job
   has not completed a run in 36 hours, the app pings the owner (a check that its safety net still runs).
@@ -501,9 +507,9 @@ event stored (not with option 0), a real reply filed.
 - The language comes from the account (some apps write German as well as English and Turkish; some write only English
   and Turkish); absolute `https://` links; plain text, with an optional HTML part of the same words.
 - Send only from the app's own address; the app's throttles and quiet hours stay in the app.
-- A selling app calls inside its sale-event handling, caps that wait at 4 seconds (under the provider's 5-second webhook
-  timeout), answers the webhook with an error until Ulak's `202`, and never marks a sale processed before it. Once a
-  day it reconciles the provider's completed sales of the last 3 days against Ulak, lists any sale without a linked
+- A selling app calls inside its sale-event handling, caps that wait below the timeout of whatever sends it the sale
+  event, answers that webhook with an error until Ulak's `202`, and never marks a sale processed before it. Once a day
+  it reconciles the completed sales against Ulak over that sender's re-delivery window plus a day, lists any sale without a linked
   acceptance as an alert, and pings the owner if the job has not completed a run in 36 hours (5.4).
 - The sending-health check waits at most 2 seconds and counts no answer as `ok` (5.2).
 - A mail the app must send at a fixed moment (for example a notice that states how long data is kept) is sent at that
