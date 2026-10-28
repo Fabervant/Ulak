@@ -18,8 +18,8 @@ something fails. The apps keep their own words and their own timing.
 **What the apps send today** (their letters): about eight apps send mail; all but two send only the sign-in mails
 (confirm your address, reset your password, "someone tried to sign up with your address", "a sign-in was added").
 Three send more (payment receipts, an under-18 account closing, an inactivity warning, the first client's game mails).
-None sends marketing. Volume today, all apps together: well under 1,000 mails a month (the busiest app: "a handful a
-day"; the rest: a handful a month or none yet).
+None sends marketing. Volume today, all apps together, as the apps estimate it (none keeps a send log to count from):
+well under 1,000 mails a month (the busiest app: "a handful a day"; the rest: a handful a month or none yet).
 
 **Base (what the brief and the law need):**
 
@@ -144,7 +144,8 @@ itself cannot accept the mail.
   - after the owner removes that path, the app may show "we cannot send mail right now, try again later" only from
     `GET /v1/mail/status` (send key), which answers `{ sending: "ok" | "down" }` from Ulak's recent results with the
     vendor across all apps, never from anything about the address. The app asks it before answering the person, the
-    same way for every address.
+    same way for every address, caps that wait at 2 seconds, and treats no answer as `ok`, so a slow status call never
+    delays a sign-in screen.
 - A durable notice whose loss matters (for example an inactivity warning) can read its state with `GET /v1/mail/:id`
   (option O5).
 
@@ -171,6 +172,11 @@ date, plan and price:
   Ulak does not answer `202`, the app answers the payment webhook with an error, so the provider delivers the event
   again, and the `idempotency_key` (the sale's id) keeps it to one mail. The app does not mark the sale processed before
   Ulak's `202`. From the `202` on, Ulak's record is the durable record of the duty.
+- **Daily reconciliation** (each selling app): the payment provider re-delivers a failed event only for a limited
+  window, so an Ulak outage longer than that would lose the duty silently. Once a day the app reads the provider's
+  completed sales of the last 3 days and calls `POST /v1/mail` again for each with the same `idempotency_key`: an
+  accepted one returns its first result and sends nothing; a missing one is sent, and the app pings the owner that it
+  was missed.
 - Its `expires_at` is set by the legal read of the deadline (legal read 6); until that read, 24 hours, and the owner is
   pinged after the first hour without delivery.
 - Ulak keeps the exact sent copy (subject, text, recipient, version, reference, the time the vendor accepted it, the
@@ -446,6 +452,7 @@ mail.
   and Turkish); absolute `https://` links; plain text.
 - Send only from the app's own address; the app's throttles and quiet hours stay in the app.
 - A selling app calls inside its sale-event handling, answers the payment webhook with an error until Ulak's `202`, and
-  never marks a sale processed before it (5.4).
+  never marks a sale processed before it, and reconciles the provider's completed sales against Ulak once a day (5.4).
+- The sending-health check waits at most 2 seconds and counts no answer as `ok` (5.2).
 - A mail the app must send at a fixed moment (an account-closing notice that states how long data is kept) is sent at
   that moment; Ulak does not delay it.
