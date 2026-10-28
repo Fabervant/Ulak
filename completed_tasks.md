@@ -50,7 +50,8 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
   current account has one outgoing quota of 50-500 mails an hour shared by every app and the
   company's own mail, no bursts, up to an hour's stop when exceeded; the Apple relay registration
   already covers the company domain. With GRIDIGMA's AGREED, the spec is marked the final version
-  for the owner's approval (`ce045ca`).
+  for the owner's approval (`ce045ca`). FabervantOps's last letter ("ba2e91c - AGREED, nothing
+  open") archived; told it the final version is with the owner.
 - No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
