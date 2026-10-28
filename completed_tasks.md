@@ -52,6 +52,12 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
   already covers the company domain. With GRIDIGMA's AGREED, the spec is marked the final version
   for the owner's approval (`ce045ca`). FabervantOps's last letter ("ba2e91c - AGREED, nothing
   open") archived; told it the final version is with the owner.
+- **Owner's decisions on the final spec** (pop-ups, S13): decision 2 "Plain text in the mail
+  (Recommended)", asked twice at his request with the reasons against HTML attachments; recorded in
+  the spec (`d9e06aa`). Decision 1: he picked "Mail service, option 1 (Recommended)", then asked why
+  it is recommended; answered (delivery and bounce reports as legal evidence, bounced legal documents
+  caught, one shared hourly quota on the current account; better inbox placement unproven); his
+  confirmation is pending, so it is not yet recorded.
 - No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
