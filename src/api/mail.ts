@@ -6,26 +6,47 @@ import { nowIso } from "../core/time";
 import { requireMailConfig } from "../core/mail/config";
 import { addrHash } from "../core/mail/hash";
 import { validateMail, mailMistake, MAIL_MAX_BODY_BYTES, ADDRESS } from "../core/mail/validate";
-import { answerStatus, attemptMail, deleteMailsByAddress, findByIdempotencyKey, insertMail, isSuppressed, recipientWaitSec, sendingHealth } from "../core/mail/outbox";
+import { attemptMail, deleteMailsByAddress, findByIdempotencyKey, insertMail, isSuppressed, recipientWaitSec, sendingHealth, type MailStatus } from "../core/mail/outbox";
 import { applyEvent, parseEvents, signedPayload, verifySignature } from "../core/mail/webhook";
 import { tellFailures } from "../core/mail/job";
-import { readJsonCapped } from "./body";
+import { readJsonCapped, readTextCapped } from "./body";
 
 type Ctx = { Bindings: Env; Variables: AppVars };
 
 const suppressed = () => new ApiError(422, "suppressed", "this address does not receive mail from this app", false);
 
+/** The answer for a mail in a given state, the same on the first call and on every repeat of its key:
+ *  a mail Ulak will not send is never answered 2xx, so the app's own path can still send it. */
+function answer(c: Context<Ctx>, id: string, status: MailStatus): Response {
+  switch (status) {
+    case "queued":
+      return c.json({ id, status: "queued" }, 202);
+    case "refused":
+      throw suppressed();
+    case "failed":
+      throw new ApiError(500, "mail_failed", "the mail service refused this mail as malformed; the operator has been told", false, { id });
+    case "given_up":
+      throw new ApiError(410, "mail_expired", "this mail reached its expires_at before it could be sent", false, { id });
+    default:
+      return c.json({ id, status: "sent" }, 202);
+  }
+}
+
+const refuseBrowser = (c: Context<Ctx>) => {
+  if (c.req.header("origin")) throw new ApiError(403, "server_only", "mail is sent from a server, never from a browser", false);
+};
+
 /** Mail is sent from an app's server: a browser request is refused before the key is even read,
  *  so a send key is never tried from a page. */
 async function serverApp(c: Context<Ctx>) {
-  if (c.req.header("origin")) throw new ApiError(403, "server_only", "mail is sent from a server, never from a browser", false);
+  refuseBrowser(c);
   await requireSendKey()(c, async () => {}); // 401
   return c.get("app");
 }
 
 export function mountMail(app: Hono<Ctx>): void {
   app.post("/v1/mail", async (c) => {
-    if (c.req.header("origin")) throw new ApiError(403, "server_only", "mail is sent from a server, never from a browser", false);
+    refuseBrowser(c); // 403
     const raw = await readJsonCapped(c.req.raw, MAIL_MAX_BODY_BYTES); // 413 / 415 / 400
     const tenant = await serverApp(c); // 401
     const cfg = requireMailConfig(c.env); // 503 / 500
@@ -35,7 +56,7 @@ export function mountMail(app: Hono<Ctx>): void {
     if (mistake) throw mistake; // 422, the app's own mistake
 
     const prior = await findByIdempotencyKey(c.env.DB, tenant.id, m.idempotency_key, now);
-    if (prior) return c.json({ id: prior.id, status: answerStatus(prior.status) }, 202);
+    if (prior) return answer(c, prior.id, prior.status);
 
     const hash = await addrHash(cfg.hashSecret, tenant.id, m.to);
     if (await isSuppressed(c.env.DB, tenant.id, hash)) throw suppressed();
@@ -44,16 +65,12 @@ export function mountMail(app: Hono<Ctx>): void {
       const wait = await recipientWaitSec(c.env.DB, tenant.id, hash, now);
       throw new ApiError(429, "rate_limited", "too many mails to this address; retry after the indicated seconds", true, {}, { "Retry-After": String(wait) });
     }
-    if (!ins.created) return c.json({ id: ins.row.id, status: answerStatus(ins.row.status) }, 202);
+    if (!ins.created) return answer(c, ins.row.id, ins.row.status);
 
-    const out = await attemptMail(c.env.DB, cfg, ins.row, tenant, now);
-    if (out.status === "refused") {
-      c.executionCtx.waitUntil(tellFailures(c.env));
-      throw suppressed();
-    }
-    if (out.status === "failed") c.executionCtx.waitUntil(tellFailures(c.env));
-    // A mail Ulak could not hand over is still Ulak's: the timer retries it until it expires.
-    return c.json({ id: ins.row.id, status: out.status === "sent" ? "sent" : "queued" }, 202);
+    const out = await attemptMail(c.env.DB, cfg, ins.row, tenant);
+    if (out.status === "refused" || out.status === "failed") c.executionCtx.waitUntil(tellFailures(c.env));
+    // A mail the vendor could not take yet is still Ulak's: the timer retries it until it expires.
+    return answer(c, ins.row.id, out.status);
   });
 
   app.get("/v1/mail/status", async (c) => {
@@ -64,7 +81,7 @@ export function mountMail(app: Hono<Ctx>): void {
 
   // Deletion by address: in the body, never in a URL, so the address reaches no request log.
   app.post("/v1/mail/delete", async (c) => {
-    if (c.req.header("origin")) throw new ApiError(403, "server_only", "mail is sent from a server, never from a browser", false);
+    refuseBrowser(c);
     const raw = (await readJsonCapped(c.req.raw)) as { address?: unknown } | null;
     const tenant = await serverApp(c);
     const cfg = requireMailConfig(c.env);
@@ -75,10 +92,11 @@ export function mountMail(app: Hono<Ctx>): void {
   });
 
   // The vendor's delivery, bounce and complaint reports. No key: the vendor's signature instead.
+  // The vendor signs the payload only, not the header's timestamp, so the five-minute window limits
+  // stale deliveries but cannot stop a replay of a captured event; every event is safe to apply twice.
   app.post("/v1/mail/events", async (c) => {
     const cfg = requireMailConfig(c.env);
-    const body = await c.req.text();
-    if (body.length > MAIL_MAX_BODY_BYTES) throw new ApiError(413, "payload_too_large", "event too large", false);
+    const body = await readTextCapped(c.req.raw, MAIL_MAX_BODY_BYTES); // 413 before buffering more
     const payload = signedPayload(body, c.req.header("content-type") ?? "");
     if (payload === null || !(await verifySignature(c.req.header("producer-signature") ?? null, payload, cfg.webhookKey, Date.now()))) {
       throw new ApiError(401, "bad_signature", "missing or invalid signature", false);

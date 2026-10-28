@@ -73,7 +73,10 @@ function parseOne(raw: unknown): MailEvent {
   const object = `${s(d.object) ?? ""} ${s(e.event_name) ?? ""}`.toLowerCase().replace(/[\s_-]+/g, " ");
   const ref = s(info.client_reference);
   const requestId = s(m.request_id) ?? s(e.request_id);
-  const reason = scrubAddresses([s(details.reason), s(details.diagnostic_message)].filter(Boolean).join(": ")).slice(0, 300);
+  // Kept: the vendor's reason category and the server's status code (such as 5.1.1). Never the remote
+  // server's own text, which often names the mailbox even without an @.
+  const code = (s(details.diagnostic_message) ?? "").match(/\b[245]\.\d{1,3}\.\d{1,3}\b/)?.[0];
+  const reason = [scrubAddresses(s(details.reason) ?? "unknown").slice(0, 80), code].filter(Boolean).join(" ");
   if (/hard ?bounce/.test(object)) return { type: "hardbounce", ref, requestId, reason };
   if (/soft ?bounce/.test(object)) return { type: "softbounce", ref, requestId, reason };
   if (/fbl|complaint|feedback/.test(object)) return { type: "complaint", ref, requestId, reason };

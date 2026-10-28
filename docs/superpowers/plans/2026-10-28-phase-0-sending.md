@@ -238,3 +238,22 @@ Nothing of a mail is logged but its id, app, label, status and a scrubbed error.
 2. **"Fails at start":** "Block deploy + red health (Recommended)". The pre-deploy check stops a half-set deploy; at run
    time the mail routes answer `500 mail_config_half_set` and the health check turns red, while support messages keep
    working.
+
+## Changes after the independent review (Session 14)
+
+The review of `80e7e99` found 1 high, 4 medium and 7 low findings, all fixed with a test each:
+- giving up expired mails runs before the configuration gate, so their address and content are deleted on time while
+  the settings are missing or half set;
+- a mail Ulak will not send is never answered `202`: `500 mail_failed` (vendor called it malformed), `410
+  mail_expired` on a repeat after give-up, `422 suppressed` on a repeat of a refused mail;
+- the claim and every result write use the clock at that step and the lease the attempt holds, and a result is written
+  only while the mail is still `queued` under that lease, so a bounce reported meanwhile is never overwritten; a run
+  stops taking mails after two minutes;
+- the webhook body is read under the cap as a stream; the vendor's error text is never stored (status, codes and field
+  names only); a bounce keeps the vendor's reason and the SMTP status code, never the remote server's text; the
+  operator line is claimed before it is sent; a key that raced in at the ceiling returns its mail, not `429`;
+- the webhook's timestamp is not signed by the vendor, so the five-minute window cannot stop a replay; every event is
+  safe to apply twice (stated in the code and in `docs/self-hosting.md`);
+- `html` may carry styles (mail HTML depends on them) but nothing that loads: `url(`, `image-set(`, `@import`, `src`,
+  `srcset`, `background` and `http-equiv` are refused, as are `<img>`, `<link>` and embedded content. This meets the
+  spec's "no scripts, no forms and no images"; the plan's earlier list also named `<style` and `<meta`.

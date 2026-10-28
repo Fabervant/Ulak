@@ -191,7 +191,8 @@ In the vendor's console, for the agent Ulak sends with:
 4. Add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
    and feedback loop (spam complaints); open and click off. Set the agent's **Authentication Key**
    and put the same value in `MAIL_WEBHOOK_KEY`. Requests without a valid signature less than five
-   minutes old are refused.
+   minutes old are refused. The vendor signs the event, not its timestamp, so the window cannot stop a
+   replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
 
 Then, per app, on **Apps**: the From name, the *sends transactional mail* tick, the app's labels,

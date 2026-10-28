@@ -164,7 +164,11 @@ describe("webhook events", () => {
     });
   it("a hard bounce, its reason scrubbed", () => {
     const [e] = parseEvents(ev("hardbounce"));
-    expect(e).toMatchObject({ type: "hardbounce", ref: "mail-1", requestId: "req-1" });
+    expect(e).toMatchObject({ type: "hardbounce", ref: "mail-1", requestId: "req-1", reason: "Mailbox not found" });
+    // The remote server's text is dropped; only its status code would be kept.
+    const [f] = parseEvents(ev("hardbounce").replace("550 p@example.org unknown", "550 5.1.1 user john.doe unknown"));
+    expect(f).toMatchObject({ reason: "Mailbox not found 5.1.1" });
+    expect(JSON.stringify(f)).not.toContain("john.doe");
     expect(JSON.stringify(e)).not.toContain("p@example.org");
   });
   it("soft bounce, complaint, delivered, and open is ignored", () => {

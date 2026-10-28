@@ -6,7 +6,9 @@ import { createApp, updateApp, rotateSendKey, rotateKey } from "../src/core/apps
 import { vendorTransport } from "../src/core/mail/vendor";
 import { addrHash } from "../src/core/mail/hash";
 import { runOutbox } from "../src/core/mail/job";
-import { claimMail } from "../src/core/mail/outbox";
+import { claimMail, insertMail } from "../src/core/mail/outbox";
+import { validateMail } from "../src/core/mail/validate";
+import { tellFailures } from "../src/core/mail/job";
 import { runScheduled } from "../src/core/retention";
 import { runChecks } from "../src/core/checks";
 import { deleteUser } from "../src/core/messages";
@@ -227,9 +229,11 @@ describe("the outbox timer", () => {
     replies.push(down);
     const { id } = await (await send(key)).json<{ id: string }>();
     const now = nowIso();
-    expect(await claimMail(env.DB, id, now)).toBe(true);
-    expect(await claimMail(env.DB, id, addMinutes(now, 1))).toBe(false);
-    expect(await claimMail(env.DB, id, addMinutes(now, 3))).toBe(true);
+    expect(await claimMail(env.DB, id, now)).toBeTruthy();
+    expect(await claimMail(env.DB, id, addMinutes(now, 1))).toBeNull();
+    expect(await claimMail(env.DB, id, addMinutes(now, 3))).toBeTruthy();
+    // Never once its expiry has passed, lease or not.
+    expect(await claimMail(env.DB, id, addMinutes(now, 61))).toBeNull();
   });
 
   it("runs on the 5-minute schedule; the hourly schedule does not send", async () => {
@@ -396,5 +400,121 @@ describe("deletion", () => {
     await updateApp(env.DB, "demo", { retention_days: 1 });
     const r = await runScheduled(env as Env, addMinutes(nowIso(), 2 * 24 * 60));
     expect(r.expired_mails).toBe(1);
+  });
+});
+
+describe("review findings of the first build", () => {
+  const telegram = () => menv({ NOTIFIER: "telegram", TELEGRAM_BOT_TOKEN: "t", TELEGRAM_CHAT_ID: "c" });
+  async function withLines<T>(fn: (lines: string[]) => Promise<T>): Promise<T> {
+    const { TelegramNotifier } = await import("../src/core/notify/telegram");
+    const real = TelegramNotifier.prototype.send;
+    const lines: string[] = [];
+    TelegramNotifier.prototype.send = async function (n) {
+      await Promise.resolve();
+      lines.push(n.text);
+    };
+    try {
+      return await fn(lines);
+    } finally {
+      TelegramNotifier.prototype.send = real;
+    }
+  }
+
+  it("an expired mail's address and content are deleted even while the mail settings are missing", async () => {
+    const key = await mailApp();
+    replies.push(down);
+    const { id } = await (await send(key, { expires_at: addMinutes(nowIso(), 10) })).json<{ id: string }>();
+    const r = await runOutbox(menv({ MAIL_API_KEY: undefined }), addMinutes(nowIso(), 11));
+    expect(r).toMatchObject({ given_up: 1, skipped: "mail configuration half set" });
+    expect(await row(id)).toMatchObject({ status: "given_up", to_addr: null, subject: null, text_body: null });
+  });
+
+  it("a mail the vendor calls malformed is answered 500 mail_failed, never 202, and so is its repeat", async () => {
+    const key = await mailApp();
+    replies.push(() => new Response('{"error":{"code":"TM_3301"}}', { status: 400 }));
+    const body = mailBody();
+    const first = await call("/v1/mail", key, { body });
+    expect(first.status).toBe(500);
+    expect(await first.json()).toMatchObject({ error: "mail_failed", retryable: false });
+    const again = await call("/v1/mail", key, { body });
+    expect(again.status).toBe(500);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("a repeat of a refused mail is 422 suppressed again, and of a given-up mail 410 mail_expired", async () => {
+    const key = await mailApp();
+    replies.push(() => new Response('{"error":{"code":"TM_4001","details":[{"code":"SM_113","target":"to"}]}}', { status: 400 }), down);
+    const refusedBody = mailBody();
+    expect((await call("/v1/mail", key, { body: refusedBody })).status).toBe(422);
+    const again = await call("/v1/mail", key, { body: refusedBody });
+    expect(again.status).toBe(422);
+    expect(await again.json()).toMatchObject({ error: "suppressed" });
+    const lateBody = mailBody({ to: "late@example.org", expires_at: addMinutes(nowIso(), 10) });
+    expect(await (await call("/v1/mail", key, { body: lateBody })).json()).toMatchObject({ status: "queued" });
+    await runOutbox(menv(), addMinutes(nowIso(), 11));
+    const late = await call("/v1/mail", key, { body: lateBody });
+    expect(late.status).toBe(410);
+    expect(await late.json()).toMatchObject({ error: "mail_expired" });
+  });
+
+  it("a bounce recorded while the vendor call is in flight is not overwritten by its answer", async () => {
+    const key = await mailApp();
+    replies.push(async () => {
+      // The vendor's bounce report lands before Ulak records the vendor's answer.
+      await env.DB.prepare("UPDATE mails SET status='bounced', lease_until=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL").run();
+      return new Response('{"request_id":"req-1"}', { status: 200 });
+    });
+    const res = await send(key);
+    expect(await res.json()).toMatchObject({ status: "sent" });
+    expect((await env.DB.prepare("SELECT status FROM mails").first<{ status: string }>())!.status).toBe("bounced");
+    expect((await send(key)).status).toBe(422);
+  });
+
+  it("an attempt that lost its lease does not record over the new holder", async () => {
+    const key = await mailApp();
+    replies.push(async () => {
+      // Another caller takes the mail meanwhile (as after an expired lease).
+      await env.DB.prepare("UPDATE mails SET lease_until=?").bind(addMinutes(nowIso(), 30)).run();
+      return down();
+    });
+    const { id } = await (await send(key)).json<{ id: string }>();
+    expect(await row(id)).toMatchObject({ status: "queued", attempts: 0 });
+  });
+
+  it("at the ceiling, a repeat of a key that raced in gets that mail, not 429", async () => {
+    const key = await mailApp();
+    const now = nowIso();
+    for (let i = 0; i < 10; i++) expect((await send(key)).status).toBe(202);
+    const taken = (await env.DB.prepare("SELECT idempotency_key k, id FROM mails LIMIT 1").first<{ k: string; id: string }>())!;
+    const hash = await addrHash(MAIL.MAIL_HASH_SECRET, "demo", "person@example.org");
+    const r = await insertMail(env.DB, "demo", validateMail(mailBody({ idempotency_key: taken.k }), now), hash, now);
+    expect(r).toMatchObject({ created: false, row: { id: taken.id } });
+  });
+
+  it("the operator line is sent once even when a request and the timer tell at the same time", async () => {
+    const key = await mailApp();
+    replies.push(() => new Response('{"error":{"code":"TM_3301"}}', { status: 400 }));
+    await send(key, {}, menv());
+    const lines = await withLines(async (lines) => {
+      await Promise.all([tellFailures(telegram()), tellFailures(telegram()), tellFailures(telegram())]);
+      return lines;
+    });
+    expect(lines).toHaveLength(1);
+  });
+
+  it("a webhook body over the cap is refused before it is read whole", async () => {
+    await mailApp();
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "data=" + "x".repeat(600_000) }), menv(), ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(413);
+  });
+
+  it("a vendor error that echoes the mail's values stores none of them", async () => {
+    const key = await mailApp();
+    replies.push(() => new Response('{"error":{"code":"TM_8001","details":[{"code":"SM_129","target":"subject","target_value":"Reset with https://app.example.org/reset?t=secret-token"}]}}', { status: 400 }));
+    await send(key);
+    const r = (await env.DB.prepare("SELECT last_error FROM mails").first<{ last_error: string }>())!;
+    expect(r.last_error).toBe("HTTP 400 TM_8001 SM_129 (field subject)");
   });
 });

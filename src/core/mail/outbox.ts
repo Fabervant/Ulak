@@ -1,5 +1,5 @@
 import { newId } from "../ids";
-import { addMinutes } from "../time";
+import { addMinutes, nowIso } from "../time";
 import { D1_MAX_PARAMS, placeholders } from "../sql";
 import type { AppRow } from "../apps";
 import type { MailConfig } from "./config";
@@ -45,9 +45,6 @@ const HOUR = 60;
 /** Minutes to wait after the n-th failed attempt: 5, 10, 20, 40, then every hour. */
 export const backoffMinutes = (n: number): number => Math.min(5 * 2 ** Math.max(0, n - 1), HOUR);
 
-/** What the app is told about a mail: the vendor has it, or Ulak is still trying. */
-export const answerStatus = (s: MailStatus): "sent" | "queued" => (s === "queued" ? "queued" : "sent");
-
 /** The first mail with this idempotency key in the last IDEMPOTENCY_DAYS. */
 export async function findByIdempotencyKey(db: D1Database, app: string, key: string, now: string): Promise<MailRow | null> {
   return db
@@ -81,7 +78,11 @@ export async function insertMail(db: D1Database, app: string, m: MailRequest, ad
       )
       .bind(id, app, m.kind, m.label, m.locale, addrHash, m.user_ref, m.idempotency_key, m.to, m.subject, m.text, m.html, now, m.expires_at, addMinutes(now, -HOUR), RECIPIENT_HOURLY_LIMIT)
       .run();
-    if (!meta.changes) return null;
+    if (!meta.changes) {
+      // At the ceiling, a call with the key of a mail that just raced in is a repeat, not a new mail.
+      const prior = await findByIdempotencyKey(db, app, m.idempotency_key, now);
+      return prior ? { row: prior, created: false } : null;
+    }
   } catch (e) {
     if (!/UNIQUE/i.test(String(e))) throw e;
     const prior = await findByIdempotencyKey(db, app, m.idempotency_key, now);
@@ -102,23 +103,30 @@ export async function getMail(db: D1Database, id: string): Promise<MailRow | nul
   return db.prepare("SELECT * FROM mails WHERE id=?").bind(id).first<MailRow>();
 }
 
-/** Takes the mail for one attempt. Only one caller holds it at a time, so the request's first attempt
- *  and the timer never send the same mail together. */
-export async function claimMail(db: D1Database, id: string, now: string): Promise<boolean> {
+/** Takes the mail for one attempt, returning the lease that marks the holder, or null. Only one
+ *  caller holds a mail at a time, so the request's first attempt and the timer never send it
+ *  together, and a mail past its expiry is never taken. */
+export async function claimMail(db: D1Database, id: string, now: string): Promise<string | null> {
+  const lease = addMinutes(now, LEASE_MINUTES);
   const { meta } = await db
-    .prepare("UPDATE mails SET lease_until=? WHERE id=? AND status='queued' AND to_addr IS NOT NULL AND (lease_until IS NULL OR lease_until<=?)")
-    .bind(addMinutes(now, LEASE_MINUTES), id, now)
+    .prepare("UPDATE mails SET lease_until=? WHERE id=? AND status='queued' AND to_addr IS NOT NULL AND expires_at>? AND (lease_until IS NULL OR lease_until<=?)")
+    .bind(lease, id, now, now)
     .run();
-  return meta.changes === 1;
+  return meta.changes === 1 ? lease : null;
 }
 
 export type AttemptOutcome = { status: MailStatus; result: VendorResult["kind"] | "not_claimed" };
 
 /** One attempt at a mail the caller has not claimed yet: claim, call the vendor, record the result.
- *  The body and the plain address are deleted the moment the vendor accepts the mail or Ulak stops
- *  trying it. A mail the vendor took but Ulak could not mark is retried: duplicate over loss. */
-export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow, app: AppRow, now: string, transport?: typeof fetch): Promise<AttemptOutcome> {
-  if (!(await claimMail(db, row.id, now))) return { status: row.status, result: "not_claimed" };
+ *  Times come from the clock at each step, never from a run's start, so a long run cannot hand out
+ *  a lease that has already run out. The result is written only while this attempt still holds the
+ *  lease and the mail is still queued: a vendor event that arrived meanwhile (a bounce, a delivery)
+ *  is never overwritten. The body and the plain address are deleted the moment the vendor accepts
+ *  the mail or Ulak stops trying it. A mail the vendor took but Ulak could not mark is retried:
+ *  duplicate over loss. */
+export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow, app: AppRow, transport?: typeof fetch): Promise<AttemptOutcome> {
+  const lease = await claimMail(db, row.id, nowIso());
+  if (!lease) return { status: row.status, result: "not_claimed" };
   const result = await sendViaVendor(cfg, {
     id: row.id,
     fromAddress: `${app.id}@${cfg.fromDomain}`,
@@ -128,44 +136,39 @@ export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow,
     text: row.text_body!,
     html: row.html_body,
   }, transport);
-  const done = new Date().toISOString();
+  const done = nowIso();
   const attempts = row.attempts + 1;
-  const close = (status: MailStatus, error: string | null) =>
-    db
-      .prepare("UPDATE mails SET status=?, attempts=?, last_error=?, lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL, last_activity_at=? WHERE id=?")
-      .bind(status, attempts, error, done, row.id);
-  const stmts: D1PreparedStatement[] = [];
+  const held = "WHERE id=? AND status='queued' AND lease_until=?";
+  const gone = "lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL";
+  let write: D1PreparedStatement;
   let status: MailStatus;
   switch (result.kind) {
     case "accepted":
       status = "sent";
-      stmts.push(
-        db
-          .prepare("UPDATE mails SET status='sent', attempts=?, sent_at=?, vendor_request_id=?, last_error=NULL, lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL, last_activity_at=? WHERE id=?")
-          .bind(attempts, done, result.requestId || null, done, row.id),
-        db.prepare("INSERT INTO mail_attempts (at,ok) VALUES (?,1)").bind(done),
-      );
+      write = db
+        .prepare(`UPDATE mails SET status='sent', attempts=?, sent_at=?, vendor_request_id=?, last_error=NULL, ${gone}, last_activity_at=? ${held}`)
+        .bind(attempts, done, result.requestId || null, done, row.id, lease);
       break;
     case "vendor_down":
       status = "queued";
-      stmts.push(
-        db
-          .prepare("UPDATE mails SET attempts=?, last_error=?, lease_until=NULL, next_attempt_at=?, last_activity_at=? WHERE id=?")
-          .bind(attempts, result.error, addMinutes(done, backoffMinutes(attempts)), done, row.id),
-        db.prepare("INSERT INTO mail_attempts (at,ok) VALUES (?,0)").bind(done),
-      );
+      write = db
+        .prepare(`UPDATE mails SET attempts=?, last_error=?, lease_until=NULL, next_attempt_at=?, last_activity_at=? ${held}`)
+        .bind(attempts, result.error, addMinutes(done, backoffMinutes(attempts)), done, row.id, lease);
       break;
     case "address_refused":
-      status = "refused";
-      stmts.push(close("refused", result.error));
-      break;
     case "request_bad":
-      status = "failed";
-      stmts.push(close("failed", result.error));
+      status = result.kind === "address_refused" ? "refused" : "failed";
+      write = db.prepare(`UPDATE mails SET status=?, attempts=?, last_error=?, ${gone}, last_activity_at=? ${held}`).bind(status, attempts, result.error, done, row.id, lease);
       break;
   }
-  await db.batch(stmts);
-  return { status, result: result.kind };
+  const { meta } = await write!.run();
+  // Calls the vendor accepted or failed on its side count for the health check, whoever recorded the mail.
+  if (result.kind === "accepted" || result.kind === "vendor_down") await db.prepare("INSERT INTO mail_attempts (at,ok) VALUES (?,?)").bind(done, result.kind === "accepted" ? 1 : 0).run();
+  if (!meta.changes) {
+    const now = await getMail(db, row.id);
+    return { status: now?.status ?? status!, result: result.kind };
+  }
+  return { status: status!, result: result.kind };
 }
 
 /** Queued mails whose `expires_at` has passed: given up, their content deleted. Returns them for the operator line. */
@@ -195,8 +198,14 @@ export async function untoldFailures(db: D1Database): Promise<MailRow[]> {
   return (await db.prepare("SELECT * FROM mails WHERE status IN ('given_up','failed','refused') AND operator_told_at IS NULL ORDER BY created_at LIMIT ?").bind(OUTBOX_BATCH).all<MailRow>()).results;
 }
 
-export async function markTold(db: D1Database, id: string, now: string): Promise<void> {
-  await db.prepare("UPDATE mails SET operator_told_at=? WHERE id=?").bind(now, id).run();
+/** Takes the right to tell the operator of this mail; only one caller gets it, so the line is sent once. */
+export async function claimTelling(db: D1Database, id: string, now: string): Promise<boolean> {
+  return (await db.prepare("UPDATE mails SET operator_told_at=? WHERE id=? AND operator_told_at IS NULL").bind(now, id).run()).meta.changes === 1;
+}
+
+/** Gives the right back when the line could not be sent, so the next run tries again. */
+export async function releaseTelling(db: D1Database, id: string): Promise<void> {
+  await db.prepare("UPDATE mails SET operator_told_at=NULL WHERE id=?").bind(id).run();
 }
 
 /** The operator's line for a mail Ulak stopped trying: no address, no subject, no link. */

@@ -231,12 +231,15 @@ Answers:
 | `422` | `unknown_label`, `kind_not_allowed`, `bad_link`, `not_plain_text`, `bad_html` | your app's own mistake: a bug to fix, never shown to the person |
 | `422` | `suppressed` | this address does not receive your app's mail (it bounced, the person marked a mail as spam, or the mail service refused it) |
 | `429` | `rate_limited`, `Retry-After` | more than 10 mails to this address from your app in the last hour |
+| `410` | `mail_expired` | a repeat of a key whose mail reached its `expires_at` unsent: send it by your own path or not at all |
+| `500` | `mail_failed` | the mail service refused this mail as malformed (a fault on Ulak's side; the operator is told): send it by your own path |
 | `401` | `invalid_send_key` | |
 | `403` | `server_only` | the request carried an `Origin` header |
 | `500` | `mail_config_half_set` | the operator's mail settings are incomplete |
 | `503` | `mail_unconfigured` | this instance does not send mail |
 
-The call waits for the first attempt, at most about 8 seconds.
+The call waits for the first attempt, at most about 8 seconds. A repeat of an `idempotency_key` gets the same
+answer as the mail it names has now: `sent`, `queued`, `422 suppressed`, `410 mail_expired` or `500 mail_failed`.
 
 **Your app's side** (the same for every app):
 

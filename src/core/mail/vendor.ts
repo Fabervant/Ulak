@@ -27,6 +27,7 @@ export const SEND_TIMEOUT_MS = 8000;
 const CODE = /\b(?:TM|SM|SERR|LE|AE|UE|MTR|SMI|GE)_\d+\b/g;
 const REQUEST_BAD = new Set(["TM_3201", "TM_3301", "TM_8001"]);
 const TO_FIELD = /"target(?:_value)?"\s*:\s*"to"|field "to"/i;
+const TARGET = /"target"\s*:\s*"([a-z_]{1,32})"/gi;
 
 const short = (s: string) => scrubAddresses(s).replace(/\s+/g, " ").slice(0, 300);
 
@@ -57,8 +58,11 @@ export function classify(status: number, body: string): VendorResult {
     }
     return { kind: "accepted", requestId };
   }
+  // Only the status, the vendor's codes and the names of the fields it objects to are kept: its text
+  // may echo a value of the mail (an address, a link with its token), which must never be stored.
   const codes = [...new Set(body.match(CODE) ?? [])];
-  const error = short(`HTTP ${status}${codes.length ? " " + codes.join(" ") : ""}: ${body}`);
+  const fields = [...new Set([...body.matchAll(TARGET)].map((t) => t[1]!))];
+  const error = `HTTP ${status}${codes.length ? " " + codes.join(" ") : ""}${fields.length ? ` (field ${fields.join(", ")})` : ""}`;
   if (status >= 500 || status === 401 || status === 403 || status === 408 || status === 429) return { kind: "vendor_down", error };
   if (codes.includes("TM_4001") && TO_FIELD.test(body)) return { kind: "address_refused", error };
   if (codes.some((c) => REQUEST_BAD.has(c))) return { kind: "request_bad", error };

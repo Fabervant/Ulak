@@ -81,7 +81,7 @@ const URL_IN_TEXT = /\b[a-z][a-z0-9+.-]*:\/\/[^\s<>"']*/gi;
 const LINK_ATTR = /\b(?:href|action|formaction|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
 // Styles are allowed (mail HTML depends on them) as long as they load nothing.
 const FORBIDDEN_TAG = /<\s*(script|form|img|iframe|frame|object|embed|link|base|svg|video|audio|picture|source|input|button|textarea|select)\b/i;
-const FORBIDDEN_ATTR = /\s(on[a-z]+|src|srcset|background|poster|http-equiv)\s*=|url\s*\(|@import/i;
+const FORBIDDEN_ATTR = /\s(on[a-z]+|src|srcset|background|poster|http-equiv)\s*=|url\s*\(|image-set\s*\(|@import/i;
 
 const httpsOnly = (url: string) => /^https:\/\/[^\s/]+/i.test(url.trim());
 
