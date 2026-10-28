@@ -489,14 +489,20 @@ event stored (not with option 0), a real reply filed.
    "No non-image attachments, except up to 4 HTML attachments on outbound legal documents").
    **Owner, Session 13: plain text in the mail body.**
 3. **Push stays in the apps** (recommended): no app needs it moved, and Ulak would hold every push credential.
+   **Owner, Session 13: push stays in the apps** ("Push stays in the apps (Recommended)").
 4. **Store reviews: not now** (recommended): few apps are in a store, and one store key reaches every app.
+   **Owner, Session 13: not now** ("Not now (Recommended)").
 5. **App mailboxes:** forward the selling apps' mailboxes after a check (recommended), a two-day reminder (a withdrawal
    can wait 2 of its 14 days), or nothing.
+   **Owner, Session 13: forward the selling apps' mailboxes after the check** ("Forward selling apps' mail
+   (Recommended)").
 6. **Commercial mail stays off** (recommended): no app sends it, and İYS consent cannot be checked.
+   **Owner, Session 13: off** ("Marketing mail stays off (Recommended)").
 7. **The apps' own sign-in path:** kept as a fallback until he says it goes; after that, sign-in depends on Ulak and the
-   vendor.
+   vendor. **Owner, Session 13: kept until he says** ("Keep backup until I say (Recommended)").
 8. **Which of options O3-O8 (11.2) and the phase order** (recommended: none of them now; base phases 0-4 in order,
-   phase 1 first after 0).
+   phase 1 first after 0). **Owner, Session 13: none of the options; base phases 0-4 in order** ("None of them
+   (Recommended)").
 
 ## 13. Open inputs
 
