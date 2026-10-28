@@ -210,8 +210,9 @@ date, plan and price:
   sandbox therefore proves the daily reconciliation, not re-delivery.
 - **Daily reconciliation** (each selling app): an Ulak outage longer than the sender's re-delivery window would
   otherwise lose the duty silently. Once a day the app reads the completed sales (from the payment provider or the
-  subscription service) for a look-back of the sender's re-delivery window plus a day (for example 3 days for the
-  provider's window; 1 day and 2 hours for a window of 80 minutes), and calls `POST /v1/mail` again for each with
+  subscription service) for a look-back of the sender's re-delivery window plus a day, and never less than two days
+  (3 days for the provider's window; 2 days for a window of 80 minutes, so one late or failed run is still covered by
+  the next), and calls `POST /v1/mail` again for each with
   the same `idempotency_key`: an accepted one returns its first result and sends nothing; a missing one is sent, and the app pings the owner that it was missed. A
   sale with no linked acceptance is never called and is listed in the owner ping as an alert, never skipped. If the job
   has not completed a run in 36 hours, the app pings the owner (a check that its safety net still runs).
@@ -534,7 +535,7 @@ event stored (not with option 0), a real reply filed.
 - A selling app (200-350 lines of its own in phase 1) makes only the legal-document call inside its sale-event
   handling and sends every other mail after the webhook is answered; it caps that wait below the timeout of whatever
   sends it the sale event, answers that webhook with an error until Ulak's `202`, and never marks a sale processed before it. Once a day
-  it reconciles the completed sales against Ulak over that sender's re-delivery window plus a day, lists any sale without a linked
+  it reconciles the completed sales against Ulak over that sender's re-delivery window plus a day (never less than two days), lists any sale without a linked
   acceptance as an alert, and pings the owner if the job has not completed a run in 36 hours (5.4).
 - The sending-health check waits at most 2 seconds and counts no answer as `ok` (5.2).
 - A mail the app must send at a fixed moment (for example a notice that states how long data is kept) is sent at that
