@@ -1,10 +1,10 @@
-# Ulak as the communication service - specification (DRAFT 3, for the re-read of changes)
+# Ulak as the communication service - specification (FINAL VERSION, for the owner's approval)
 
-Status: draft 3, 2026-10-28 (Session 13; amended at the first client's request and for operations' third review). Draft 1 (2026-10-24) was reviewed by the first client application and by
-company operations; draft 2 (`22664db`) was agreed by the first client with three notes and reviewed again by
-operations (NOT YET: 2 high, 5 medium, 14 low; all 15 draft-1 findings closed). Draft 3 answers that second review.
-Two of the other mail-sending apps have not answered the question "what do you send and receive". Next: operations
-re-reads what changed; then the owner's approval. **Nothing in this document is built before the owner approves it.**
+Status: final version, 2026-10-28 (Session 13). Draft 1 (2026-10-24) and draft 2 (`22664db`) were reviewed by the
+first client application and by company operations; draft 3 answered their findings and was **agreed by both**
+(the first client at `fdcb269`, operations at `fdcb269` plus its last two reads, folded in after). Two of the other
+mail-sending apps have not answered the question "what do you send and receive". Next: the owner's approval.
+**Nothing in this document is built before the owner approves it.**
 
 This repository is public: this document names no other project, person or deployment host, and
 no mail or payment vendor (Telegram and Apple are named where their role needs it). "The company domain" and
