@@ -1,4 +1,6 @@
-# Ulak as the communication service - specification (FINAL VERSION, for the owner's approval)
+# Ulak as the communication service - specification (APPROVED by the owner, 2026-10-28)
+
+**Approved, Session 13:** "Approve, start phase 0 (Recommended)". His answers to decisions 1-8 are in section 12.
 
 Status: final version, 2026-10-28 (Session 13). Draft 1 (2026-10-24) and draft 2 (`22664db`) were reviewed by the
 first client application and by company operations; draft 3 answered their findings and was **agreed by both**
