@@ -1,5 +1,34 @@
 # Completed tasks
 
+## Session 12 — 2026-10-28
+
+Mailbox (11 letters), communication-service spec draft 2 (O2) out for the second review, the owner's
+admin sign-in proven live.
+
+- **Mailbox.** 10 letters at the start, 1 during; all 11 acted on and archived.
+  - FabervantOps S248 (delete non-coding history): MEMORY.md session index, the empty Blockers and
+    Open decisions sections, and the copied plain-language pointer deleted; 124 lines / 10,399 B to
+    80 lines / 7,244 B, memory_lint OK; CLAUDE.md unchanged (25 lines, 1,462 B). Reported by letter.
+    The same cut answers FabervantOps S253 (MEMORY.md under 120 lines).
+  - FabervantOps S251 (next prompt last; no file outside the project folder): read, followed.
+  - Answers from CashFlow, BooMoo, CoDoList, DuPari and TEGlyx folded into draft 2; TEGlyx (a client)
+    answered by letter. Astrolect and TradeComrade have not read the 2026-10-24 letter yet.
+- **Spec draft 2** (`ed24fbf`, amended `22664db`): GRIDIGMA's 12 points and FabervantOps's 15
+  findings folded in. New section 0, the owner's one screen: base phases 0-4 about 33 files / 3,200
+  lines in Ulak plus about 8 apps x 150-500 lines; smallest Türkiye-documents path about 15 files /
+  1,300 lines; vendor option 1 about $5 a year, option 2 $5 a month (prices read 2026-10-28 on the
+  vendors' pages; option 1's per-credit amount only from third-party listings). Sign-in mails go
+  after the app's answer, so nothing reveals an account; `immediate`/`durable` merged into one model
+  bounded by each mail's `expires_at`; art 9 table; attachment decision put once with the exact
+  Decision wording; extras moved to options O1-O7. Sent to GRIDIGMA and FabervantOps.
+  - GRIDIGMA S565: AGREED, three notes; the status check capped at 2 s with no answer as ok, and a
+    daily reconciliation of sales against Ulak, folded in (`22664db`). FabervantOps told to review
+    that commit.
+- **Owner's admin sign-in after PKCE:** he asked for the address ("give me the address and I'll do
+  it now"), signed in with his Google account; his screenshot shows the panel's message list. The
+  live `/auth/login` was read first: it sends `code_challenge_method=S256` to Google.
+- No code changed; 271 tests unchanged. Commits `ed24fbf`, `22664db`.
+
 ## Session 11 — 2026-10-24
 
 Maintenance session: mailbox (17 letters), drift review, refactor round 3 and the feature review,
