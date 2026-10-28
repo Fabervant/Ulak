@@ -253,9 +253,12 @@ date, plan and price:
      vendor DNS. Loses: delivery events (5.4 keeps only the sent time), the vendor's suppression list (5.3), and the
      sending-health check reads only Ulak's own connection failures. A legal document that bounces is never detected
      by Ulak: the bounce lands in the sending login's mailbox and is found only by someone reading it. Ulak sends with
-     its own sending identity or an SMTP-only application password, never the owner's own login secret. The account's
-     daily sending limit, and whether today's path already has the Apple relay registration, are read by operations
-     before the final version goes to the owner. Keeps the owner's current rule.
+     its own sending identity or an SMTP-only application password, never the owner's own login secret. Its limit
+     (operations, 2026-10-28): one shared outgoing quota of 50-500 mails an hour, set by reputation, for every app's
+     mail and the company's own mail together; bursts are not supported, and over the limit nothing can be sent for up
+     to an hour. Far above today's volume, but one burst (a bug, a mass re-send) could stop every app's mail and the
+     company's own for an hour, so Ulak's retries spread re-sends and never burst. The Apple relay registration
+     already covers the company domain, so option 0 needs no new one. Keeps the owner's current rule.
   1. **The transactional service of the mail provider the company already uses** (recommended): first credit free; a
      credit is 10,000 mails, valid 6 months; no monthly minimum. Its pricing page shows no price per credit;
      third-party listings say about $2.50. Its account check is reported to take up to a month. A second product of the
@@ -474,7 +477,8 @@ event stored (not with option 0), a real reply filed.
 1. **Vendor, and with it his mail rule.** Today's rule: app mail goes over the company's mail account from each app's
    own address, with no second mail vendor. Option 0 keeps it (no cost, no wait; no delivery evidence for legal
    documents and no bounce list: a legal document that bounces is never detected by Ulak, only by someone reading the
-   sending mailbox). Option 1, the transactional service of the mail provider the company already uses
+   sending mailbox; and one hourly quota of at least 50 mails shared by every app and the company's own mail, which one
+   burst could stop for up to an hour). Option 1, the transactional service of the mail provider the company already uses
    (recommended: about $5 a year if third-party prices hold, the same company, delivery and bounce reports; its account
    check may take a month), or option 2, the platform ($5 a month, still in beta), both change the rule.
 2. **Legal documents' form:** plain text in the mail body (recommended: operations' read accepts it as a durable medium
@@ -497,8 +501,6 @@ event stored (not with option 0), a real reply filed.
 - Whether the payment provider's own receipt can carry part of the documents duty: not confirmed with the provider (a
   "needs first" of phase 1).
 - The vendor's suppression list, webhook signature and log retention: read in the vendor's documentation in phase 0.
-- For option 0, the account's daily sending limit and whether today's path already has the Apple relay registration:
-  read by operations before the final version goes to the owner.
 - Each selling app's sale-event sender and its webhook terms (timeout, re-delivery window): read before that app's
   phase 1.
 
