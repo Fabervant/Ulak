@@ -481,6 +481,8 @@ event stored (not with option 0), a real reply filed.
    burst could stop for up to an hour). Option 1, the transactional service of the mail provider the company already uses
    (recommended: about $5 a year if third-party prices hold, the same company, delivery and bounce reports; its account
    check may take a month), or option 2, the platform ($5 a month, still in beta), both change the rule.
+   **Owner, Session 13: option 1** ("Mail service, option 1 (Recommended)"; after the reasons, "yeah my pick of option
+   1 stands"). His mail rule changes accordingly.
 2. **Legal documents' form:** plain text in the mail body (recommended: operations' read accepts it as a durable medium
    when the whole text is in the mail, never only a link; the order fields are filled in; and it is the version the
    buyer accepted, with Ulak keeping the sent copy; no rule change, smaller), or HTML attachments (the Decision becomes
