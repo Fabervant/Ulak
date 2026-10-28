@@ -71,7 +71,8 @@ No mail carries a tracking pixel, open or click tracking, or a rewritten link. N
 sent.
 
 These records are deleted {{RETENTION_DAYS}} days after their last activity, or at once when the app
-deletes your account or you ask for deletion by address.
+deletes your account or you ask for deletion by address. {{MAIL_VENDOR}} keeps its own delivery log
+of each mail for 60 days; the mail's text is not stored there. This service cannot delete that log.
 
 ## Documents after a purchase
 
@@ -109,6 +110,9 @@ a provider outside {{CONTROLLER_COUNTRY}}; each notification contains only the a
 platform (such as iOS or Android), whether it is a message or a crash report, and a link with a
 random identifier that opens the message in {{CONTROLLER_NAME}}'s admin panel, which only the
 operator can sign in to. It contains nothing you wrote.
+
+Mails are delivered through {{MAIL_VENDOR}} ({{MAIL_VENDOR_REGION}}). Delivering a mail means your
+address and the mail's text leave Türkiye: {{MAIL_VENDOR}} processes them in {{MAIL_VENDOR_REGION}}.
 
 ## Not done
 

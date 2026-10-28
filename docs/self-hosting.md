@@ -187,7 +187,8 @@ In the vendor's console, for the agent Ulak sends with:
 1. Verify the sending domain (its SPF and DKIM records) and set DMARC for it.
 2. Turn **open tracking and click tracking off**. Ulak sends `track_opens: false` and
    `track_clicks: false` on every mail as well.
-3. Turn **auto-suppression** on for hard bounces, for this agent.
+3. Turn **auto-suppression** on for hard bounces, for this agent, and **content storage off**, so the
+   vendor's 60-day delivery log holds no mail text (the privacy statement says it does not).
 4. Add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
    and feedback loop (spam complaints); open and click off. Set the agent's **Authentication Key**
    and put the same value in `MAIL_WEBHOOK_KEY`. Requests without a valid signature less than five
