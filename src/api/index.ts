@@ -16,6 +16,9 @@ import { notifyMessage } from "../core/notify/dispatch";
 import { channelFromEnv } from "../core/notify/notifier";
 import { validateNotice, reserveNotice, releaseNotice, noticeWaitSec } from "../core/notices";
 import { cors } from "./cors";
+import { readJsonCapped } from "./body";
+import { mountMail } from "./mail";
+import { runOutbox } from "../core/mail/job";
 import { runScheduled } from "../core/retention";
 import { uploadImage, imageCodecFor, imageTooLarge, MAX_IMAGE_BYTES } from "../core/images";
 
@@ -36,47 +39,6 @@ app.onError((err) => {
 });
 
 app.use("*", cors());
-
-const tooLarge = () => new ApiError(413, "payload_too_large", `request body exceeds ${MAX_BODY_BYTES} bytes`, false, { max_bytes: MAX_BODY_BYTES });
-
-/** Reads a JSON body under the cap, rejecting before parsing. Order: 413, 415, then 400. */
-async function readJsonCapped(req: Request): Promise<unknown> {
-  const declared = Number(req.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) throw tooLarge();
-  if (!/^application\/json\b/i.test(req.headers.get("content-type") ?? "")) throw new ApiError(415, "unsupported_media_type", "Content-Type must be application/json", false);
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  const reader = req.body?.getReader();
-  if (reader) {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > MAX_BODY_BYTES) {
-        await reader.cancel();
-        throw tooLarge();
-      }
-      chunks.push(value);
-    }
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const ch of chunks) {
-    out.set(ch, off);
-    off += ch.byteLength;
-  }
-  let text: string;
-  try {
-    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(out);
-  } catch {
-    throw new ApiError(400, "invalid_request", "body is not valid UTF-8", false, { field: "body" });
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new ApiError(400, "invalid_request", "body is not valid JSON", false, { field: "body" });
-  }
-}
 
 app.post("/v1/messages", async (c) => {
   const raw = await readJsonCapped(c.req.raw); // 413 / 415 / 400 before anything else
@@ -191,9 +153,15 @@ app.delete("/v1/messages", requireAppKey(), async (c) => {
   return c.json({ deleted_messages });
 });
 
+mountMail(app);
+
+/** The outbox timer's schedule; every other schedule runs the hourly job. */
+export const OUTBOX_CRON = "*/5 * * * *";
+
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runScheduled(env).then((r) => console.log("scheduled", JSON.stringify(r))));
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (event.cron === OUTBOX_CRON) ctx.waitUntil(runOutbox(env).then((r) => console.log("outbox", JSON.stringify(r))));
+    else ctx.waitUntil(runScheduled(env).then((r) => console.log("scheduled", JSON.stringify(r))));
   },
 };

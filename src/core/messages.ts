@@ -5,6 +5,7 @@ import { allClaimable, claimStatement, deleteImagesWhere } from "./images";
 import { D1_MAX_PARAMS, placeholders } from "./sql";
 import { nowIso } from "./time";
 import type { SubmitPayload } from "./validate";
+import { deleteMailsByUser } from "./mail/outbox";
 
 export interface MessageRow {
   id: string;
@@ -177,8 +178,9 @@ export async function setStatus(db: D1Database, id: string, status: string, allo
 }
 
 /** Hard deletion of everything a user_ref owns in one app: images first, objects before rows,
- *  then the messages, whose cascade takes the replies. */
+ *  then the messages, whose cascade takes the replies, and the mails sent with that user_ref. */
 export async function deleteUser(env: Env, app: string, user_ref: string): Promise<{ deleted_messages: number }> {
+  await deleteMailsByUser(env.DB, app, user_ref);
   await deleteImagesWhere(env, "app=? AND user_ref=?", [app, user_ref]);
   // meta.changes would include cascaded reply rows, so count first.
   const n = (await env.DB.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).first<{ n: number }>())?.n ?? 0;

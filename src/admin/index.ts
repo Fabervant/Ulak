@@ -14,12 +14,14 @@ import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, newPkce, clear
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
-import { listApps, createApp, updateApp, rotateKey, rotateNoticeKey } from "../core/apps";
+import { listApps, createApp, updateApp, rotateKey, rotateNoticeKey, rotateSendKey } from "../core/apps";
+import { listOutbox } from "../core/mail/outbox";
+import { outboxView } from "./views/outbox";
 import { listImagesFor } from "../core/images";
 import { createAdminToken, listAdminTokens, revokeAdminToken } from "../core/auth/admintoken";
 import { api, imageLinks } from "./api";
 import { runChecks } from "../core/checks";
-import { nowSec } from "../core/time";
+import { nowIso, nowSec } from "../core/time";
 import { sha256Hex, timingSafeEqual } from "../core/ids";
 
 type Ctx = { Bindings: Env; Variables: AdminVars };
@@ -193,8 +195,26 @@ app.post("/apps/:id", async (c) => {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    mail_from_name: f.mail_from_name ?? "",
+    mail_kinds: f.mail_transactional === "on" ? ["transactional"] : [],
+    mail_labels: (f.mail_labels ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
   });
   return c.redirect("/apps", 303);
+});
+
+app.post("/apps/:id/send-key", async (c) => {
+  await readForm(c);
+  const id = c.req.param("id");
+  return shownOnce(c, "apps", { id, key: await rotateSendKey(c.env.DB, id), send: true });
+});
+
+app.get("/outbox", async (c) => {
+  const filterApp = c.req.query("app") || undefined;
+  const [rows, apps] = await Promise.all([listOutbox(c.env.DB, nowIso(), filterApp), listApps(c.env.DB)]);
+  return page(c, "Outbox", () => outboxView(rows, apps.map((a) => a.id), filterApp));
 });
 
 app.post("/apps/:id/rotate", async (c) => {

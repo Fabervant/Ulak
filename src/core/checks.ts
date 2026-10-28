@@ -6,6 +6,10 @@ export interface CheckResult {
   unnotified_over_10m: number;
   past_retention: number;
   unclaimed_images_over_30m: number;
+  /** 1 when the outbox timer last found the mail settings half set. */
+  mail_config_half_set: number;
+  /** Queued mails 15 minutes past their expiry: the outbox timer is not running. */
+  mails_stuck: number;
   /** Informational, not a pass/fail condition: R2 has no free size query, so this is the
    *  sum of what Ulak recorded on upload. Orphans in the bucket would not be counted. */
   stored_images: number;
@@ -22,12 +26,16 @@ export async function runChecks(db: D1Database, now: string = nowIso()): Promise
     `SELECT COUNT(*) n FROM messages m JOIN apps a ON a.id=m.app WHERE m.last_activity_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-' || a.retention_days || ' days')`,
   );
   const unclaimed_images_over_30m = await one(`SELECT COUNT(*) n FROM images WHERE message_id IS NULL AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-30 minutes')`);
+  const mail_config_half_set = await one("SELECT COUNT(*) n FROM service_state WHERE key='mail_config' AND value='half_set' AND at <= ?");
+  const mails_stuck = await one(`SELECT COUNT(*) n FROM mails WHERE status='queued' AND expires_at < strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-15 minutes')`);
   const storage = await db.prepare("SELECT COUNT(*) c, COALESCE(SUM(bytes),0) b FROM images").first<{ c: number | null; b: number | null }>();
   return {
-    ok: unnotified_over_10m === 0 && past_retention === 0 && unclaimed_images_over_30m === 0,
+    ok: unnotified_over_10m === 0 && past_retention === 0 && unclaimed_images_over_30m === 0 && mail_config_half_set === 0 && mails_stuck === 0,
     unnotified_over_10m,
     past_retention,
     unclaimed_images_over_30m,
+    mail_config_half_set,
+    mails_stuck,
     stored_images: storage?.c ?? 0,
     stored_image_bytes: storage?.b ?? 0,
   };

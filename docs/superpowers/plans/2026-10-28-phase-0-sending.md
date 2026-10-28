@@ -93,7 +93,7 @@ kind TEXT NOT NULL, label TEXT NOT NULL, locale TEXT NOT NULL
 addr_hash TEXT NOT NULL, user_ref TEXT
 idempotency_key TEXT           -- unique per app while set; cleared after 7 days
 to_addr TEXT, subject TEXT, text_body TEXT, html_body TEXT   -- nulled on vendor accept or give-up
-status TEXT NOT NULL           -- queued | sent | delivered | bounced | complained | given_up | failed
+status TEXT NOT NULL           -- queued | sent | delivered | bounced | complained | given_up | refused | failed
 attempts INTEGER NOT NULL DEFAULT 0
 next_attempt_at TEXT, lease_until TEXT
 expires_at TEXT NOT NULL, created_at TEXT NOT NULL, sent_at TEXT, delivered_at TEXT
@@ -105,11 +105,12 @@ Indexes: `(app, idempotency_key)` unique where set; `(app, addr_hash, created_at
 `(vendor_request_id)`; `(app, user_ref)`; `(last_activity_at)`.
 
 Table `mail_attempts (at TEXT, ok INTEGER)`: one row per vendor attempt, no personal data, purged after an hour; the
-sending-health check reads it.
+sending-health check reads it. Table `service_state`: the outbox timer records whether the mail settings are set,
+unset or half set, for the health check the admin Worker serves (it cannot read the API Worker's settings).
 
 ### `POST /v1/mail` (spec 5.1, 5.2)
 
-Order: refuse `Origin` (403) -> body cap 64 KiB and JSON (413/415/400) -> send key (401) -> config (503/500) -> fields
+Order: refuse `Origin` (403) -> body cap 512 KiB and JSON (413/415/400) -> send key (401) -> config (503/500) -> fields
 (400) -> app's own mistakes (422) -> idempotency (repeat: first result, `202`) -> suppression (422) -> per-recipient
 ceiling (429) -> insert -> first attempt (at most 8 s) -> `202 { id, status: "sent" | "queued" }`.
 

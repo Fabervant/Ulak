@@ -189,3 +189,11 @@ export function webpWithMetadata(webp: Uint8Array, width: number, height: number
     { fourcc: "XMP ", data: ascii("<x:xmpmeta>GPS</x:xmpmeta>") },
   ]);
 }
+
+/** The vendor's own algorithm, assembled independently of Ulak's code: base64 HMAC-SHA256 of the
+ *  decoded parameter, URL-encoded into the header; the body form-encoded with spaces as `+`. */
+export async function vendorSigned(json: string, key: string, ts: number): Promise<{ body: string; header: string }> {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(json)))));
+  return { body: "data=" + encodeURIComponent(json).replace(/%20/g, "+"), header: `ts=${ts};s=${encodeURIComponent(sig)};s-algorithm=HmacSHA256` };
+}

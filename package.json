@@ -11,7 +11,7 @@
     "dev:api": "wrangler dev -c wrangler.api.jsonc",
     "dev:admin": "wrangler dev -c wrangler.admin.jsonc --port 8788",
     "dev:images": "wrangler dev -c wrangler.images.jsonc --port 8789",
-    "deploy:api": "wrangler deploy -c wrangler.api.jsonc",
+    "deploy:api": "node scripts/check-mail-config.mjs && wrangler deploy -c wrangler.api.jsonc",
     "deploy:admin": "wrangler deploy -c wrangler.admin.jsonc",
     "deploy:images": "wrangler deploy -c wrangler.images.jsonc",
     "migrate:local": "wrangler d1 migrations apply ulak --local -c wrangler.api.jsonc",

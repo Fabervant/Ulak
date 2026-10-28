@@ -26,6 +26,12 @@ export interface Env {
   NOTIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  /** Outbound mail: all five or none (src/core/mail/config.ts). */
+  MAIL_API_URL?: string;
+  MAIL_FROM_DOMAIN?: string;
+  MAIL_API_KEY?: string;
+  MAIL_WEBHOOK_KEY?: string;
+  MAIL_HASH_SECRET?: string;
 }
 
 export function statusList(env: Env): string[] {

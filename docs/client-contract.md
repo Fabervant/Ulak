@@ -168,6 +168,104 @@ DELETE /v1/messages?user_ref=<ref>
 Hard-deletes every message, reply and image that `user_ref` sent to your app. Call it from your
 account-deletion flow. Returns `{"deleted_messages": n}`.
 
+## Sending mail
+
+If the operator has set up outbound mail and turned it on for your app, your app's server hands its
+finished mails to Ulak, and Ulak sends them from your app's own address (`<app id>@` the operator's
+mail domain). Your app keeps its words and its timing; Ulak owns the transport, the retries and the
+record.
+
+**The send key.** Mail takes its own key, `ulak_send_<app>_<48 hex characters>`, issued on the
+operator's **Apps** page and kept on your server only. Every mail call that carries an `Origin`
+header is refused (`403 server_only`) before the key is read, so a send key never works from a web
+page, and the app key in your pages can never send mail.
+
+The operator also records, for your app: the From name, that it sends `transactional` mail, and the
+list of your mail labels (one per kind of mail, for example `confirm_email`, `password_reset`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/v1/mail` | send one mail |
+| `GET` | `/v1/mail/status` | whether Ulak can send right now |
+| `POST` | `/v1/mail/delete` | delete every record of mail to one address |
+
+### `POST /v1/mail`
+
+```json
+{
+  "to": "person@example.org",
+  "locale": "en",
+  "kind": "transactional",
+  "label": "password_reset",
+  "subject": "Reset your password",
+  "text": "Open https://app.example.org/reset?t=... to choose a new password. The link works for one hour.",
+  "html": "<p><a href=\"https://app.example.org/reset?t=...\">Choose a new password</a></p>",
+  "expires_at": "2026-11-01T10:00:00Z",
+  "idempotency_key": "reset-7f3c...",
+  "user_ref": "0123456789abcdef0123456789abcdef"
+}
+```
+
+| Field | Rule |
+|---|---|
+| `to` | one address |
+| `locale` | the language the text is in, for example `en`, `tr`, `pt-BR`; recorded, never used to choose words |
+| `kind` | `transactional`; `legal_document` is refused until Ulak supports it |
+| `label` | your name for this mail; must be on your app's list |
+| `subject` | one line, at most 500 characters |
+| `text` | your finished plain text, at most 100,000 characters; every link absolute `https://` |
+| `html` | optional: the same mail as HTML, at most 200,000 characters. Links absolute `https://`; no scripts, forms, images, frames or anything that loads from elsewhere (styles are fine). A guard against mistakes, not a sanitiser: Ulak sends it as given |
+| `expires_at` | required, later than now and at most 24 hours ahead. After it, Ulak gives the mail up instead of sending it late. A sign-in link mail: the link's own lifetime or less |
+| `idempotency_key` | required, 1 to 128 printable characters; one per action of the person or event of your app. The same key within 7 days returns the first result and sends nothing |
+| `user_ref` | optional, as elsewhere; only used to delete the person's records with your account deletion |
+
+The whole request is at most 512 KiB.
+
+Answers:
+
+| Status | Body | Meaning |
+|---|---|---|
+| `202` | `{"id":"...","status":"sent"}` | the mail service accepted it |
+| `202` | `{"id":"...","status":"queued"}` | Ulak has it and retries every few minutes until `expires_at` |
+| `400` | `invalid_request` with `field` | a field is missing or malformed |
+| `422` | `unknown_label`, `kind_not_allowed`, `bad_link`, `not_plain_text`, `bad_html` | your app's own mistake: a bug to fix, never shown to the person |
+| `422` | `suppressed` | this address does not receive your app's mail (it bounced, the person marked a mail as spam, or the mail service refused it) |
+| `429` | `rate_limited`, `Retry-After` | more than 10 mails to this address from your app in the last hour |
+| `401` | `invalid_send_key` | |
+| `403` | `server_only` | the request carried an `Origin` header |
+| `500` | `mail_config_half_set` | the operator's mail settings are incomplete |
+| `503` | `mail_unconfigured` | this instance does not send mail |
+
+The call waits for the first attempt, at most about 8 seconds.
+
+**Your app's side** (the same for every app):
+
+- Answer the person first; call Ulak after, and cap your wait at 10 seconds.
+- Treat `422 suppressed` and `429` exactly as a sent mail on screen. Never reveal, by words or by
+  timing, whether an address has an account.
+- While your app keeps its own sending path, a failed or timed-out call sends through that path at
+  once. A timed-out call may still have been queued by Ulak, so the person may receive the mail
+  twice: duplicate over loss, chosen knowingly.
+- Send no `Reply-To`: Ulak sets it to your app's own address.
+- Your throttles and quiet hours stay in your app; Ulak only adds the per-address ceiling above.
+
+### `GET /v1/mail/status`
+
+`{"sending":"ok"}` or `{"sending":"down"}`. `down` means Ulak's last three calls to the mail service
+in the past ten minutes all failed on the service's side; it never depends on any address. Ask it,
+if at all, the same way for every address, cap the wait at 2 seconds, and treat no answer as `ok`.
+
+### `POST /v1/mail/delete`
+
+```json
+{"address": "person@example.org"}
+```
+
+Deletes every record of mail your app sent to that address and answers `{"deleted_mails": n}`. The
+address travels in the body, never in the URL, so it reaches no request log. Ulak stores an address
+only as a keyed hash that differs per app, so one app's request never touches another app's
+records. `DELETE /v1/messages?user_ref=` also deletes the mail records sent with that `user_ref`.
+
 ## Images
 
 Only if the operator enabled images for your app. Upload each image first, then list the returned

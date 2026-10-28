@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from "hono";
 import type { Env } from "../env";
 import { ApiError } from "../errors";
-import { findAppByKey, findAppByNoticeKey, type AppRow } from "../apps";
+import { findAppByKey, findAppByNoticeKey, findAppBySendKey, type AppRow } from "../apps";
 
 export type AppVars = { app: AppRow };
 
@@ -19,3 +19,4 @@ function requireKey(find: (db: D1Database, key: string) => Promise<AppRow | null
 
 export const requireAppKey = () => requireKey(findAppByKey, "invalid_app_key", "app key");
 export const requireNoticeKey = () => requireKey(findAppByNoticeKey, "invalid_notice_key", "notice key");
+export const requireSendKey = () => requireKey(findAppBySendKey, "invalid_send_key", "send key");

@@ -11,6 +11,7 @@ import { getApp } from "../src/core/apps";
 import worker from "../src/api/index";
 import { BindingRateLimiter, MemoryRateLimiter, limiterFor } from "../src/core/ratelimit";
 import { defaultFetch } from "../src/core/http";
+import { vendorTransport, sendViaVendor } from "../src/core/mail/vendor";
 import { createAdminToken } from "../src/core/auth/admintoken";
 import { createSession } from "../src/core/auth/session";
 import { PNG as png, JPG_WITH_GPS as jpg } from "./fixtures";
@@ -246,5 +247,20 @@ describe("seam: outbound transport", () => {
     // Bound, it fails on the name that does not resolve; unbound it would never get that far.
     expect(reason).not.toMatch(/illegal invocation/i);
     expect(reason).not.toBe("");
+  });
+});
+
+// The mail vendor's transport is a module-level seam: route tests swap a double into it, so
+// production must leave it at the bound default, and a vendor call through the default must
+// fail as a network error (vendor_down), never as an "Illegal invocation" thrown out of it.
+describe("seam: mail vendor transport", () => {
+  it("production leaves the vendor transport at defaultFetch", () => {
+    expect(vendorTransport.fetch).toBe(defaultFetch);
+  });
+  it("a vendor call through the default transport comes back as vendor_down, not a throw", async () => {
+    const cfg = { apiUrl: "https://ulak-seam-probe.invalid/v1.1/email", fromDomain: "example.invalid", apiKey: "k", webhookKey: "w", hashSecret: "h" };
+    const r = await sendViaVendor(cfg, { id: "m", fromAddress: "a@example.invalid", fromName: "A", to: "p@example.invalid", subject: "s", text: "t", html: null });
+    expect(r.kind).toBe("vendor_down");
+    expect(JSON.stringify(r)).not.toMatch(/illegal invocation/i);
   });
 });

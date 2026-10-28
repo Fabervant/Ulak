@@ -2,17 +2,21 @@ import { html } from "hono/html";
 import type { AppRow } from "../../core/apps";
 import { confirmAction } from "./layout";
 
-/** `newKey` is shown once: the app key goes in the app's config, the notice key on its server only. */
-export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; key: string; notice?: boolean }) {
+const KEY_NOTES = {
+  app: "Put it in that app's own config now:",
+  notice: "Put it on that app's server only, never in a web page:",
+  send: "Put it on that app's server only, never in a web page. It sends mail as this app:",
+} as const;
+
+/** `newKey` is shown once: the app key goes in the app's config, the notice and send keys on its server only. */
+export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; key: string; notice?: boolean; send?: boolean }) {
+  const which = newKey?.send ? "send" : newKey?.notice ? "notice" : "app";
   return html`${newKey
-      ? newKey.notice
-        ? html`<p class="warn">Notice key for <strong>${newKey.id}</strong>, shown once. Put it on that app's server only, never in a web page:</p>
-            <pre><code>${newKey.key}</code></pre>`
-        : html`<p class="warn">Key for <strong>${newKey.id}</strong>, shown once. Put it in that app's own config now:</p>
-            <pre><code>${newKey.key}</code></pre>`
+      ? html`<p class="warn">${which === "app" ? "Key" : which === "notice" ? "Notice key" : "Send key"} for <strong>${newKey.id}</strong>, shown once. ${KEY_NOTES[which]}</p>
+          <pre><code>${newKey.key}</code></pre>`
       : ""}
     <table>
-      <tr><th>app</th><th>retention days, images, owner notices, allowed origins</th><th></th></tr>
+      <tr><th>app</th><th>retention days, images, owner notices, allowed origins; mail: From name, transactional, labels</th><th></th></tr>
       ${apps.map(
         (a) => html`<tr>
           <td>${a.id}</td>
@@ -23,13 +27,17 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
               <label><input type="checkbox" name="images_enabled" ${a.images_enabled ? "checked" : ""} class="narrow" /> images</label>
               <label><input type="checkbox" name="notify_enabled" ${a.notify_enabled ? "checked" : ""} class="narrow" /> owner notices</label>
               <input name="allowed_origins" value="${a.allowed_origins.join(",")}" placeholder="https://a.example,https://www.a.example" />
+              <input name="mail_from_name" value="${a.mail_from_name ?? ""}" placeholder="From name, e.g. My App" />
+              <label><input type="checkbox" name="mail_transactional" ${a.mail_kinds.includes("transactional") ? "checked" : ""} class="narrow" /> sends transactional mail</label>
+              <input name="mail_labels" value="${a.mail_labels.join(",")}" placeholder="mail labels, e.g. confirm_email,password_reset" />
               <button>Save</button>
             </form>
           </td>
           <td>
             ${confirmAction(`rotate-${a.id}`, "Rotate key", `Rotate the key of ${a.id}? Its current key stops working at once, until the app's config holds the new one.`, `/apps/${a.id}/rotate`, csrf)}
             ${confirmAction(`notice-${a.id}`, "New notice key", `Make a new notice key for ${a.id}? Its current notice key stops working at once.`, `/apps/${a.id}/notice-key`, csrf)}
-            ${a.has_notice_key ? "notice key set" : "no notice key"}
+            ${confirmAction(`send-${a.id}`, "New send key", `Make a new send key for ${a.id}? Its current send key stops working at once.`, `/apps/${a.id}/send-key`, csrf)}
+            ${a.has_notice_key ? "notice key set" : "no notice key"}; ${a.has_send_key ? "send key set" : "no send key"}
           </td>
         </tr>`,
       )}

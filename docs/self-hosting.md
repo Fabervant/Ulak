@@ -164,6 +164,49 @@ It answers `200` when every message was notified within ten minutes, nothing is 
 and no uploaded image is orphaned. It answers `503` with the counts otherwise. This is the one check
 that tells you the notifier is silently failing while you believe nobody wrote.
 
+## Outbound mail (optional)
+
+Ulak can send your apps' transactional mail through a transactional mail service. The code speaks
+one vendor's API: an agent key in the `Authorization` header, one JSON call per mail, and signed
+webhooks for delivery, bounce and spam-complaint reports. Mail needs five settings, **all or none**:
+
+| Name | Where | Value |
+|---|---|---|
+| `MAIL_API_URL` | `vars` in `wrangler.api.jsonc` | the vendor's send endpoint for your account's data centre |
+| `MAIL_FROM_DOMAIN` | `vars` | the domain your apps send from; each app sends as `<app id>@` it |
+| `MAIL_API_KEY` | secret | the agent's send key |
+| `MAIL_WEBHOOK_KEY` | secret | the agent's webhook Authentication Key |
+| `MAIL_HASH_SECRET` | secret | 32 random bytes, for example `openssl rand -hex 32`; keys the per-app address hashes. Never change it once mail has been sent: suppressions and deletion by address match on it |
+
+`npm run deploy:api` refuses to deploy while some but not all five are set. If one goes missing
+later, the mail calls answer `500 mail_config_half_set` and the result check goes red within five
+minutes; support messages keep working.
+
+In the vendor's console, for the agent Ulak sends with:
+
+1. Verify the sending domain (its SPF and DKIM records) and set DMARC for it.
+2. Turn **open tracking and click tracking off**. Ulak sends `track_opens: false` and
+   `track_clicks: false` on every mail as well.
+3. Turn **auto-suppression** on for hard bounces, for this agent.
+4. Add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
+   and feedback loop (spam complaints); open and click off. Set the agent's **Authentication Key**
+   and put the same value in `MAIL_WEBHOOK_KEY`. Requests without a valid signature less than five
+   minutes old are refused.
+5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
+
+Then, per app, on **Apps**: the From name, the *sends transactional mail* tick, the app's labels,
+and *New send key*, which you hand to the app's server once.
+
+The second cron (`*/5 * * * *`) retries queued mails until each one's `expires_at`; a mail it gives
+up is reported once on Telegram, without its address or content. **Outbox** in the admin panel lists
+queued, failed, given-up, refused, bounced and complained mails with their reason; it never shows an
+address, a subject or a body.
+
+What Ulak keeps of a mail: the app, kind, label, language, a keyed hash of the address, the times,
+the result and the vendor's id. The address and the content are deleted the moment the vendor
+accepts the mail or Ulak gives it up. A hard bounce or a spam complaint makes later mail from that
+app to that address answer `422 suppressed`, until the records go by deletion or retention.
+
 ## What happens when Telegram is down
 
 The message is stored and the app gets `201` regardless. The row records the failure. The hourly

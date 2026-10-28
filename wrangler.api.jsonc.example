@@ -1,6 +1,11 @@
 // Copy to wrangler.api.jsonc (gitignored) and replace every REPLACE_ME.
 // Secrets, set with `wrangler secret put -c wrangler.api.jsonc <NAME>`:
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, IMAGE_URL_SECRET
+// Outbound mail (optional; all five or none, checked before every deploy): add the vars
+//   "MAIL_API_URL" (the mail vendor's send endpoint for your account's region) and
+//   "MAIL_FROM_DOMAIN" (each app sends from <app id>@ this domain) to "vars", and the secrets
+//   MAIL_API_KEY, MAIL_WEBHOOK_KEY, MAIL_HASH_SECRET. See docs/self-hosting.md.
+// The second cron runs the mail outbox every 5 minutes; the first is the hourly job.
 {
   "name": "ulak-api",
   "main": "src/api/index.ts",
@@ -10,7 +15,7 @@
   "d1_databases": [{ "binding": "DB", "database_name": "ulak", "database_id": "REPLACE_ME", "migrations_dir": "migrations" }],
   "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "ulak-images" }],
   "images": { "binding": "IMG" },
-  "triggers": { "crons": ["17 * * * *"] },
+  "triggers": { "crons": ["17 * * * *", "*/5 * * * *"] },
   "ratelimits": [
     { "name": "RL_SUBMIT_USER", "namespace_id": "2001", "simple": { "limit": 3, "period": 60 } },
     { "name": "RL_SUBMIT_IP", "namespace_id": "2002", "simple": { "limit": 10, "period": 60 } },

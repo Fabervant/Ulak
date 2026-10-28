@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
-import { createApp, updateApp, findAppByKey } from "../src/core/apps";
+import { createApp, updateApp, findAppByKey, getApp } from "../src/core/apps";
 import { insertMessage, getMessage } from "../src/core/messages";
 import { getImage } from "../src/core/images";
 import { createSession, readSession } from "../src/core/auth/session";
@@ -197,7 +197,7 @@ describe("admin surface", () => {
     const state = async () =>
       JSON.stringify(await Promise.all(["apps", "admins", "admin_tokens", "messages", "replies"].map(async (t) => (await env.DB.prepare(`SELECT * FROM ${t}`).all()).results)));
     const before = await state();
-    const posts = ["/auth/logout", "/auth/logout-all", `/m/${m.id}/reply`, `/m/${m.id}/status`, `/m/${m.id}/delete-user`, "/apps", "/apps/demo", "/apps/demo/rotate", "/apps/demo/notice-key", "/tokens", `/tokens/${tokenId}/revoke`];
+    const posts = ["/auth/logout", "/auth/logout-all", `/m/${m.id}/reply`, `/m/${m.id}/status`, `/m/${m.id}/delete-user`, "/apps", "/apps/demo", "/apps/demo/rotate", "/apps/demo/notice-key", "/apps/demo/send-key", "/tokens", `/tokens/${tokenId}/revoke`];
     for (const path of posts) {
       const body = "csrf=wrong&content=x&status=viewed&id=forged&name=forged&retention_days=1";
       const res = await req(path, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body });
@@ -280,6 +280,9 @@ describe("admin surface", () => {
       ["/apps/ghost", { retention_days: "30" }, 404, "app ghost not found"],
       ["/apps/ghost/rotate", {}, 404, "app ghost not found"],
       ["/apps/ghost/notice-key", {}, 404, "app ghost not found"],
+      ["/apps/ghost/send-key", {}, 404, "app ghost not found"],
+      ["/apps/demo", { retention_days: "30", mail_labels: "Bad Label" }, 400, "bad label Bad Label; labels match [a-z0-9_.-]{1,64}"],
+      ["/apps/demo", { retention_days: "30", mail_from_name: "a <b@c>" }, 400, "mail_from_name must be up to 100 characters, without quotes, angle brackets or @"],
       ["/apps/demo", { retention_days: "0" }, 400, "retention_days must be 1 to 3650"],
       ["/apps/demo", { retention_days: "30", allowed_origins: "javascript:alert(1)" }, 400, "bad origin javascript:alert(1)"],
       ["/apps", { id: "demo" }, 400, "app demo already exists"],
@@ -299,6 +302,36 @@ describe("admin surface", () => {
     const after = await (await req("/apps")).text();
     expect(after).not.toMatch(/ulak_notice_demo_[0-9a-f]{48}/);
     expect(after).toContain("notice key set");
+  });
+  it("the apps page issues a send key, shown once and server-only, and saves the sending identity", async () => {
+    expect(await (await req("/apps")).text()).toContain("no send key");
+    const issued = (await reveal(await form("/apps/demo/send-key", {}))).text;
+    expect(issued).toMatch(/ulak_send_demo_[0-9a-f]{48}/);
+    expect(issued).toContain("It sends mail as this app");
+    expect((await form("/apps/demo", { retention_days: "30", mail_from_name: "Demo App", mail_transactional: "on", mail_labels: "password_reset, confirm_email,password_reset" })).status).toBe(303);
+    const after = await (await req("/apps")).text();
+    expect(after).not.toMatch(/ulak_send_demo_[0-9a-f]{48}/);
+    expect(after).toContain("send key set");
+    expect(await getApp(env.DB, "demo")).toMatchObject({ mail_from_name: "Demo App", mail_kinds: ["transactional"], mail_labels: ["password_reset", "confirm_email"], has_send_key: true });
+    // Unticking the box takes the kind away; the labels stay.
+    await form("/apps/demo", { retention_days: "30", mail_labels: "password_reset" });
+    expect((await getApp(env.DB, "demo"))!.mail_kinds).toEqual([]);
+  });
+  it("the outbox lists failed and queued mails with their reason, never an address, subject or body", async () => {
+    const at = new Date().toISOString();
+    const ins = (id: string, status: string, error: string | null) =>
+      env.DB.prepare("INSERT INTO mails (id,app,kind,label,locale,addr_hash,to_addr,subject,text_body,status,attempts,expires_at,created_at,last_error,last_activity_at) VALUES (?,'demo','transactional','password_reset','en','h','person@example.org','Secret subject','Body with token',?,2,?,?,?,?)")
+        .bind(id, status, at, at, error, at)
+        .run();
+    await ins("m-queued", "queued", "HTTP 502: bad gateway");
+    await ins("m-bounced", "bounced", "hard bounce: Mailbox not found");
+    await ins("m-sent", "sent", null);
+    const page = await (await req("/outbox?app=demo")).text();
+    expect(page).toContain("HTTP 502: bad gateway");
+    expect(page).toContain("hard bounce: Mailbox not found");
+    expect(page.match(/password_reset/g)).toHaveLength(2);
+    for (const secret of ["person@example.org", "Secret subject", "Body with token"]) expect(page).not.toContain(secret);
+    expect(await (await req("/")).text()).toContain('href="/outbox"');
   });
   it("the tokens page creates, lists and revokes an admin token", async () => {
     const tok = await reveal(await form("/tokens", { name: "laptop" }));
@@ -341,7 +374,7 @@ describe("without a session secret the panel fails closed", () => {
 // sign-in that consumed the OAuth state must not leave that state lying around either.
 describe("sign-out leaves the browser a stranger", () => {
   it("every response is no-store, so nothing the admin saw sits in the HTTP cache", async () => {
-    for (const path of ["/", "/apps", "/tokens", "/auth/login"]) {
+    for (const path of ["/", "/outbox", "/apps", "/tokens", "/auth/login"]) {
       const res = await req(path);
       expect(res.headers.get("cache-control"), path).toBe("no-store");
     }
@@ -375,7 +408,7 @@ describe("sign-out leaves the browser a stranger", () => {
     const t = await createAdminToken(env.DB, "laptop");
     const pages: [string, string[]][] = [
       [`/m/${m.id}`, [`/m/${m.id}/delete-user`, "/auth/logout-all"]],
-      ["/apps", ["/apps/demo/rotate", "/apps/demo/notice-key"]],
+      ["/apps", ["/apps/demo/rotate", "/apps/demo/notice-key", "/apps/demo/send-key"]],
       ["/tokens", [`/tokens/${t.id}/revoke`]],
     ];
     for (const [path, actions] of pages) {

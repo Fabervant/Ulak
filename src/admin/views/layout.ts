@@ -44,7 +44,7 @@ export function layout(title: string, body: HtmlEscapedString | Promise<HtmlEsca
       </head>
       <body>
         <header>
-          <strong>Ulak</strong><a href="/">Messages</a><a href="/apps">Apps</a><a href="/tokens">Tokens</a>
+          <strong>Ulak</strong><a href="/">Messages</a><a href="/outbox">Outbox</a><a href="/apps">Apps</a><a href="/tokens">Tokens</a>
           <form class="inline" method="post" action="/auth/logout" style="margin-left:auto">
             <input type="hidden" name="csrf" value="${csrf}" /><button>Sign out</button>
           </form>
