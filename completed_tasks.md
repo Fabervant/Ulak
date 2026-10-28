@@ -1,5 +1,36 @@
 # Completed tasks
 
+## Session 13 — 2026-10-28
+
+Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
+
+- **Mailbox.** FabervantOps S256's second review of draft 2 (NOT YET: 2 high, 5 medium, 14 low; all
+  15 draft-1 findings closed) acted on and archived.
+- **Spec draft 3** (`cd15ec1`), every finding taken as written:
+  - N1: section 0 and decision 1 say vendor options 1 and 2 change the owner's standing mail rule
+    (current account, no second vendor) and are his decision; option 0 (send over the current
+    account) added first, sized (phase 0 about 14 files / 1,400 lines), no new cost, losing delivery
+    events and the vendor's bounce list. Option 1 still recommended for those reports (agent).
+  - N2: optional `html` part on `transactional` mail, https links only, `422 bad_html`, never
+    rendered, refused on `legal_document`; chosen over a "no HTML" decision because the owner's S253
+    pick ("Fuller mail + dashboards") needs it (agent, FabervantOps's recommended fix).
+  - N3 delivery gain "possible, unproven"; N4 `202 held` plus owner alert for an address-dependent
+    refusal of a legal document, `422` kept for the app's own mistakes; N5 AI-assistant row gates
+    phase 2; N6 withdrawal-word flagging moved to option O8 with its three conditions; N7 sale
+    handler sized (200-350 lines per selling app), 36-hour dead-man ping, sale without acceptance
+    listed as an alert.
+  - Read in the payment provider's webhook documentation: answer within 5 seconds, re-delivery for
+    about two days live. Draft 2's 8-second wait would have failed every legal call: a legal call is
+    now answered once the copy is stored, the app waits at most 4 s; the 3-day reconciliation is the
+    two-day window plus a day.
+  - All 14 LOW items fixed (per-app keyed hash, `down` counts only vendor failures, double-send
+    stated, "evidence" not "proof", forwarded `Received` time acceptance, product fingerprints
+    generalised, Ulak's size 4,850 lines so +66%). Public-repo grep for project, vendor and person
+    names: none.
+- Letters: FabervantOps (re-read `cd15ec1`, source links, ask for the plain-text durable-medium read
+  before the final version); GRIDIGMA (four app-side changes; asked for AGREED).
+- No code changed. Commit `cd15ec1`.
+
 ## Session 12 — 2026-10-28
 
 Mailbox (11 letters), communication-service spec draft 2 (O2) out for the second review, the owner's
