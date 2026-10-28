@@ -1,5 +1,42 @@
 # Completed tasks
 
+## Session 14 — 2026-10-28
+
+Phase 0 of the approved communication spec (O2) built, reviewed and committed; not deployed.
+
+- **Mailbox.** Empty at start. During the session FabervantOps S256 sent legal read 4 (READY AFTER FIXES) and its gate
+  change; acted on (fixes applied, `80fe7c4`), answered, archived.
+- **Vendor documentation read** (vendor option 1): the product was renamed (ZeptoMail is now Zoho CPaaS, 2026-09-23;
+  keys and agents unchanged; send API documented at `cpaas.zoho.com/v1.1/email`); no send-time code for a suppressed
+  recipient; auto-suppression covers hard bounces only; webhooks signed with HMAC-SHA256 (`producer-signature`) over the
+  decoded form parameter. Saved copies in the session scratchpad only.
+- **Plan** `docs/superpowers/plans/2026-10-28-phase-0-sending.md` (`25dd66f`), stress-tested with /grill-me. Owner's
+  two answers: suppression "Ulak remembers them (Recommended)" (a hard bounce or complaint marks the address hash; later
+  mail answers `422 suppressed`; no lift button, O3 stays declined); "fails at start" = "Block deploy + red health
+  (Recommended)". Both enforced in code and tests (`isSuppressed`, `scripts/check-mail-config.mjs`, `runChecks`).
+- **Build** (`80e7e99`): migration `0005_mail.sql` (apps' send key and sending identity, `mails`, `mail_attempts`,
+  `service_state`); `src/core/mail/` (config all-or-nothing, per-app keyed address hash, validation with the 422
+  reasons, vendor client with tracking off and an 8-second timeout, outbox with lease, ceiling, idempotency, backoff,
+  give-up, retention, webhook verification and events, 5-minute job); routes `POST /v1/mail`, `GET /v1/mail/status`,
+  `POST /v1/mail/delete`, `POST /v1/mail/events`; second cron `*/5 * * * *`; admin Outbox page, send-key button and
+  sending fields; `deploy:api` runs the half-set check first (proven red on a half-set list; the live read found none
+  of the five settings set). Agent calls: `legal_document` refused with `422 kind_not_allowed` until phase 1; the From
+  address derived from the app id, never stored; the per-app hash key derived from one secret, never stored; the vendor
+  endpoint in configuration (its EU host unknown until the account exists); `down` = the last 3 vendor calls in 10
+  minutes all failed on the vendor's side; styles allowed in `html`, anything that loads refused.
+- **Independent review** (fresh agent) of `80e7e99`: 1 high (expired mails' address and text kept while the settings
+  were missing), 4 medium (failed mails answered `queued`; stale-clock leases; bounce overwritten by a late `sent`;
+  reported test flakiness), 7 low. All fixed with a test each (`80fe7c4`); new answers `500 mail_failed` and
+  `410 mail_expired` (agent call: a mail Ulak will not send is never answered `202`). The flakiness (2 of 11 runs) did
+  not recur in 20 runs after the fixes; its cause was not confirmed.
+- **Proof:** 399 tests pass (`npm test`, verbose); typecheck and gitleaks clean; 17 planted defects in the first build
+  and 9 in the review fixes each turned the mail tests red, tree restored each time.
+- **Privacy template** (legal read 4): draft sent; FabervantOps's six fixes applied in `docs/privacy-statement.md`
+  (10-year copies from the end of the purchase year, a legal ground per section, "a code made from your address with a
+  secret key"); the vendor-log and transfer-abroad sentences wait on FabervantOps's figures.
+- **Letters:** to FabervantOps: phase 0 built, read 4 draft, four vendor facts (including that its mail gate missed the
+  `cpaas.zoho.*` host; it added it, read back in `mail_vendor_gate.py`); then the fixes applied.
+
 ## Session 13 — 2026-10-28
 
 Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
