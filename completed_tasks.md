@@ -42,7 +42,11 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
     Its durable-medium read accepts plain text on three conditions, now in 5.4, read 11 and decision 2
     (no longer conditional). Re-read asked at `fdcb269`, with option 0's daily limit and Apple relay
     question; GRIDIGMA told of three app-side lines.
-- No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`.
+- Two more letters, acted on and archived: GRIDIGMA S565 AGREED at `fdcb269` (it sets no Reply-To
+  today and its mail HTML has no images); FabervantOps S256 read `62f5353` as consistent with one low,
+  fixed as its first option: the reconciliation look-back is never less than two days (`ba2e91c`).
+  Told FabervantOps; its re-read of `cd15ec1..ba2e91c` is what remains.
+- No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`.
 
 ## Session 12 — 2026-10-28
 
