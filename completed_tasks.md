@@ -56,8 +56,16 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
   (Recommended)", asked twice at his request with the reasons against HTML attachments; recorded in
   the spec (`d9e06aa`). Decision 1: he picked "Mail service, option 1 (Recommended)", then asked why
   it is recommended; answered (delivery and bounce reports as legal evidence, bounced legal documents
-  caught, one shared hourly quota on the current account; better inbox placement unproven); his
-  confirmation is pending, so it is not yet recorded.
+  caught, one shared hourly quota on the current account; better inbox placement unproven); he
+  answered "yeah my pick of option 1 stands" (`51d6d90`). FabervantOps updated its mail-vendor gate
+  for Ulak alone (hooks `554ef09`); the other apps keep their current path until they move to Ulak.
+  Decisions 3-8, each his pick of the recommended choice: push stays in the apps; store reviews not
+  now; forward the selling apps' mailboxes after a check; marketing mail off; sign-in backup kept
+  until he says; no extras, phases 0-4 in order (`4f96476`).
+- **The spec is APPROVED** ("Approve, start phase 0 (Recommended)", `9366f0c`). Letters:
+  FabervantOps (decisions 3-8, the approval, what phase 0 needs from it), GRIDIGMA and TEGlyx (spec
+  approved, current contract unchanged, they are written to before their mails move). FabervantOps's
+  gate letter archived.
 - No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
