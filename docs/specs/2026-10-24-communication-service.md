@@ -485,6 +485,7 @@ event stored (not with option 0), a real reply filed.
    when the whole text is in the mail, never only a link; the order fields are filled in; and it is the version the
    buyer accepted, with Ulak keeping the sent copy; no rule change, smaller), or HTML attachments (the Decision becomes
    "No non-image attachments, except up to 4 HTML attachments on outbound legal documents").
+   **Owner, Session 13: plain text in the mail body.**
 3. **Push stays in the apps** (recommended): no app needs it moved, and Ulak would hold every push credential.
 4. **Store reviews: not now** (recommended): few apps are in a store, and one store key reaches every app.
 5. **App mailboxes:** forward the selling apps' mailboxes after a check (recommended), a two-day reminder (a withdrawal
