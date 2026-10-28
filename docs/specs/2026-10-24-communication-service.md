@@ -1,12 +1,13 @@
 # Ulak as the communication service - specification (DRAFT 3, for the re-read of changes)
 
-Status: draft 3, 2026-10-28 (Session 13; 5.4 amended at the first client's request). Draft 1 (2026-10-24) was reviewed by the first client application and by
+Status: draft 3, 2026-10-28 (Session 13; amended at the first client's request and for operations' third review). Draft 1 (2026-10-24) was reviewed by the first client application and by
 company operations; draft 2 (`22664db`) was agreed by the first client with three notes and reviewed again by
 operations (NOT YET: 2 high, 5 medium, 14 low; all 15 draft-1 findings closed). Draft 3 answers that second review.
 Two of the other mail-sending apps have not answered the question "what do you send and receive". Next: operations
 re-reads what changed; then the owner's approval. **Nothing in this document is built before the owner approves it.**
 
-This repository is public: this document names no other project, host, vendor or person. "The company domain" and
+This repository is public: this document names no other project, person or deployment host, and
+no mail or payment vendor (Telegram and Apple are named where their role needs it). "The company domain" and
 "`<app>`" stand for the deployment's values. Prices and the payment provider's webhook terms were read on the date
 given; sizes are estimates, counted in lines of code including tests.
 
@@ -31,7 +32,7 @@ send log to count from): well under 1,000 mails a month.
 | Phase | What changes | Ulak: files / lines (with tests) | New in Ulak |
 |---|---|---|---|
 | 0 | Sending: the send key, the mail call (plain text, and an optional HTML part), the outbox and retries, the vendor's delivery reports, the sending-health check, the admin outbox view | about 15 files / 1,500 lines | 1 table, 4 routes, a 5-minute timer |
-| 1 | Legal documents after a sale: the kept copy, search and download in the admin panel, an owner alert until each is delivered (sized for the plain-text form; HTML attachments add about 150 lines) | about 7 files / 600 lines | 1 table |
+| 1 | Legal documents after a sale: the kept copy, search and download in the admin panel, an owner alert until each is delivered (sized for the plain-text form; HTML attachments add about 150 lines) | about 7 files / 600 lines; each selling app another 200-350 lines (its sale handler, a daily check job, its alerts) | 1 table |
 | 2 | Inbound: replies to the apps' mails come to Ulak; the 14-day withdrawal clock | about 11 files / 1,100 lines | a fourth small Worker, 1 table, 1 mail subdomain |
 | 3 | Each app's other mails move to Ulak, one app at a time | Ulak: none; each app: 50-300 lines | - |
 | 4 | Each app's sign-in mails move, last, with the app's own path kept as a fallback | Ulak: none; each app: 100-200 lines | - |
@@ -127,16 +128,17 @@ the list is refused (`422 unknown_label`); the list goes to operations before th
 | `kind` | `transactional` \| `legal_document` |
 | `label` | the app's own name for the mail, for example `password_reset`; must be on the app's list |
 | `subject`, `text` | finished plain text; links absolute (`https://`) |
-| `html` | optional, `transactional` only: the app's finished HTML part of the same mail (for example the link as a button), sent beside `text`. Links in it absolute `https://`; no scripts, forms, or remote images other than `https://`. Stored and deleted exactly like `text`, never rendered in the admin panel. Refused on `legal_document` until legal read 11 says otherwise |
+| `html` | optional, `transactional` only: the app's finished HTML part of the same mail (for example the link as a button), sent beside `text`. Links in it absolute `https://`; no scripts, no forms and no images (a link button needs none, and an image could track the reader). The check guards against an app's mistakes; it is not a sanitiser. Stored and deleted exactly like `text`, never rendered in the admin panel. Refused on `legal_document` until legal read 11 says otherwise |
 | `expires_at` | required: after this time Ulak gives up instead of sending (a sign-in link mail: its link's life or less; a durable notice: its deadline). At most 24 hours ahead, except `legal_document` (5.4) |
 | `idempotency_key` | required; one per action of the person or event of the app (a second press of "send again" is a new key). The same key within 7 days returns the first result and sends nothing again |
 | `user_ref` | optional; the app's opaque account id, used only for deletion |
 | `document` | `legal_document` only: `{ version, reference }`, the accepted version and the order number |
 
 Answers:
-- `202 { id, status: "sent" | "queued" | "held" }`. `held` is only for `legal_document`: the copy is kept, nothing is
-  sent, and an owner alert is open (a suppressed address, or any other refusal that depends on the address, 5.3). The
-  app treats `held` like any `202`: the duty is now Ulak's record and the owner's alert.
+- `202 { id, status: "sent" | "queued" }`; for `legal_document` always `queued` (5.2). From the `202` on, the duty is
+  Ulak's record. If the vendor then refuses the address (suppressed, or any other refusal that depends on the address,
+  5.3), the stored legal document moves to the state **held**: nothing more is sent, the copy is kept, it shows in the
+  admin outbox and an owner alert opens (5.4). The app never sees `held` and changes nothing.
 - `422` with a reason, not retryable: the app's own mistakes (`unknown_label`, `bad_link`, `not_plain_text`,
   `bad_html`), on any kind; and `suppressed` on `transactional` only. The app treats its own mistakes as a bug and
   pings the owner itself.
@@ -175,9 +177,10 @@ Answers:
 - A per-recipient ceiling per app: 10 mails per hour per address, so a bug or an abused form cannot flood an inbox.
   Over it: `429`. `legal_document` is exempt.
 - Suppression: the vendor's own list of hard bounces and spam complaints is used (to verify in phase 0 that the vendor
-  keeps one). Ulak passes its answer back as `422 suppressed` on `transactional`; on `legal_document` the mail is
-  accepted as `held` with an open owner alert (5.1). Ulak's own list with a lift button is option O3. With vendor
-  option 0 there is no vendor list: bounces return as mail to the app's mailbox, and Ulak learns of none.
+  keeps one). Ulak passes its answer back as `422 suppressed` on `transactional`; on `legal_document`, which was already
+  answered `queued`, the stored mail moves to `held` with an open owner alert (5.1, 5.4). Ulak's own list with a lift
+  button is option O3. With vendor option 0 there is no vendor list: bounces return as mail to the mailbox of the login
+  Ulak sends with, and Ulak learns of none.
 - Links must be absolute `https://`, `text` plain text, and `html` within its limits (5.1); anything else is refused
   with a reason.
 - No tracking: open tracking, click tracking and link rewriting are off at the vendor, and Ulak never adds a pixel or
@@ -199,15 +202,17 @@ date, plan and price:
   seconds, so about 4; one subscription service waits 60 seconds); if Ulak does not answer `202` in that time, the app
   answers the webhook with an error, so the sender delivers the event again, and the `idempotency_key` (the sale's id)
   keeps it to one mail. A timeout counts as "no `202`" and is safe for the same reason. The app does not mark the sale
-  processed before Ulak's `202`. From the `202` on, Ulak's record is the durable record of the duty. (Webhook terms
-  read 2026-10-28: the payment provider re-delivers for about two days; the subscription service retries 5 times over
-  about 80 minutes.)
+  processed before Ulak's `202`. From the `202` on, Ulak's record is the durable record of the duty. Inside the sale
+  handler the app makes only the legal-document call; every other mail (a payment receipt, a welcome) is sent after
+  the webhook is answered, so its longer wait never pushes the handler past the sender's timeout. (Webhook terms read
+  2026-10-28: the payment provider re-delivers for up to about 1 day 18 hours in live, but only 3 times in about a
+  minute in its sandbox; the subscription service retries 5 times over about 80 minutes.) Phase 1 acceptance in a
+  sandbox therefore proves the daily reconciliation, not re-delivery.
 - **Daily reconciliation** (each selling app): an Ulak outage longer than the sender's re-delivery window would
   otherwise lose the duty silently. Once a day the app reads the completed sales (from the payment provider or the
   subscription service) for a look-back of the sender's re-delivery window plus a day (for example 3 days for the
-  provider's two days; 1 day and 2 hours for a window of 80 minutes), and calls `POST /v1/mail` again for each with
-  the same `idempotency_key`: an accepted one
-  returns its first result and sends nothing; a missing one is sent, and the app pings the owner that it was missed. A
+  provider's window; 1 day and 2 hours for a window of 80 minutes), and calls `POST /v1/mail` again for each with
+  the same `idempotency_key`: an accepted one returns its first result and sends nothing; a missing one is sent, and the app pings the owner that it was missed. A
   sale with no linked acceptance is never called and is listed in the owner ping as an alert, never skipped. If the job
   has not completed a run in 36 hours, the app pings the owner (a check that its safety net still runs).
 - Its `expires_at` is set by the legal read of the deadline (legal read 6); until that read, 24 hours, and the owner is
@@ -218,10 +223,16 @@ date, plan and price:
   then deleted by the scheduled job; it survives a user-data deletion until then. With vendor option 0 there is no
   delivery event: the evidence is only the time the company's mail server accepted the mail.
 - A legal document that is held, given up or bounced stays an **open owner alert** until the operator closes it by hand
-  with a reason (for example "sent again to the corrected address").
+  with a reason. Ulak sends only the app's finished text, so the remedy is one of two: the app calls again with the
+  corrected address and a new `idempotency_key`, and the alert closes naming that new mail; or the operator downloads
+  the copy and sends it by hand from the app's mailbox, and the alert closes saying so.
 - The operator finds a copy in the admin panel by reference and downloads it. The admin panel never renders it.
 - **Form** (decision 2): (a) the documents as plain text in the mail body: no rule change, about 150 lines less in phase
-  1, needs operations' durable-medium read of the plain-text form; or (b) up to 4 HTML attachments on `legal_document`
+  1. Operations' durable-medium read (2026-10-28) accepts it: the regulation lists e-mail among its examples of a
+  durable medium and names no file format, on three conditions: (1) the whole text of the pre-contract form and the
+  contract is in the mail, never only a link to a page that can change; (2) the order fields (number, date, plan,
+  price, VAT, trial dates) are filled in; (3) it is the version the buyer accepted, and Ulak keeps the copy it sent
+  (each transaction's records kept 3 years). Or (b) up to 4 HTML attachments on `legal_document`
   only, stored as sent and offered only for download: needs the owner to change the Decision to "No non-image
   attachments, except up to 4 HTML attachments on outbound legal documents". Either way, operations reads the final
   mailed form in Turkish and English before phase 1 goes live.
@@ -238,9 +249,12 @@ date, plan and price:
   except on port 25, so sending over the current account is possible.)
 - Vendor options (decision 1; prices read 2026-10-28; operations holds the source links):
   0. **Keep the company's current mail account** (Ulak sends over it): no new company, no new account, no wait, no
-     vendor DNS, no second Apple registration. Loses: delivery events (5.4 keeps only the sent time), the vendor's
-     suppression list (5.3), and the sending-health check reads only Ulak's own connection failures. The account's own
-     daily sending limit is to read. Keeps the owner's current rule.
+     vendor DNS. Loses: delivery events (5.4 keeps only the sent time), the vendor's suppression list (5.3), and the
+     sending-health check reads only Ulak's own connection failures. A legal document that bounces is never detected
+     by Ulak: the bounce lands in the sending login's mailbox and is found only by someone reading it. Ulak sends with
+     its own sending identity or an SMTP-only application password, never the owner's own login secret. The account's
+     daily sending limit, and whether today's path already has the Apple relay registration, are read by operations
+     before the final version goes to the owner. Keeps the owner's current rule.
   1. **The transactional service of the mail provider the company already uses** (recommended): first credit free; a
      credit is 10,000 mails, valid 6 months; no monthly minimum. Its pricing page shows no price per credit;
      third-party listings say about $2.50. Its account check is reported to take up to a month. A second product of the
@@ -285,7 +299,10 @@ provider and has "no strong need" to move it. If the owner picks it anyway:
 
 ### 7.1 Replies to the apps' mails (phase 2)
 
-Every outbound mail carries `Reply-To: reply+<token>@<inbound subdomain>`, where `<token>` is a signed id of that mail.
+**Who sets Reply-To.** Ulak sets it on every outbound mail; the app does not send one. Until phase 2 is live and that
+app's inbound channel is reviewed (legal read 10), Reply-To is the app's own support address (`<app>@` the company
+domain). From that review on, every outbound mail of that app carries `Reply-To: reply+<token>@<inbound subdomain>`,
+where `<token>` is a signed id of that mail.
 The inbound subdomain's MX points to the platform's mail routing, which hands each mail to a small Ulak mail Worker. The
 root domain's MX and the company mailbox are not touched. (Phase 2 acceptance: a reply from a real hidden Apple address
 reaches the Worker; Apple's documentation says nothing on replies.)
@@ -418,8 +435,9 @@ in that store. Operations would set up each store identity with the narrowest ro
 10. **Inbound free text, per app:** each app's inbound channel (7.1, 7.2) is reviewed before replies are filed under it,
     including whether any of it ever becomes visible to another person (Law 5651); 7.1's address check keeps a reply
     visible only to the person it was sent to.
-11. **The legal documents' mailed form** (5.4): the plain-text form's durable-medium read in Turkish and English, or the
-    final HTML form; whether the vendor's delivery event (or, with option 0, the sent time) is enough evidence of
+11. **The legal documents' mailed form** (5.4): the plain-text form is accepted as a durable medium on 5.4's three
+    conditions (operations, 2026-10-28; the definition's exact sentence still to verify); operations reads the final
+    mailed form in Turkish and English before phase 1 goes live; whether the vendor's delivery event (or, with option 0, the sent time) is enough evidence of
     receipt; and whether an HTML part may ever accompany a legal document.
 
 ## 11. Phases
@@ -454,12 +472,14 @@ event stored (not with option 0), a real reply filed.
 
 1. **Vendor, and with it his mail rule.** Today's rule: app mail goes over the company's mail account from each app's
    own address, with no second mail vendor. Option 0 keeps it (no cost, no wait; no delivery evidence for legal
-   documents and no bounce list). Option 1, the transactional service of the mail provider the company already uses
+   documents and no bounce list: a legal document that bounces is never detected by Ulak, only by someone reading the
+   sending mailbox). Option 1, the transactional service of the mail provider the company already uses
    (recommended: about $5 a year if third-party prices hold, the same company, delivery and bounce reports; its account
    check may take a month), or option 2, the platform ($5 a month, still in beta), both change the rule.
-2. **Legal documents' form:** plain text in the mail body (recommended if operations' read accepts it: no rule change,
-   smaller), or HTML attachments (the Decision becomes "No non-image attachments, except up to 4 HTML attachments on
-   outbound legal documents"). If the read rejects plain text, this comes back to him.
+2. **Legal documents' form:** plain text in the mail body (recommended: operations' read accepts it as a durable medium
+   when the whole text is in the mail, never only a link; the order fields are filled in; and it is the version the
+   buyer accepted, with Ulak keeping the sent copy; no rule change, smaller), or HTML attachments (the Decision becomes
+   "No non-image attachments, except up to 4 HTML attachments on outbound legal documents").
 3. **Push stays in the apps** (recommended): no app needs it moved, and Ulak would hold every push credential.
 4. **Store reviews: not now** (recommended): few apps are in a store, and one store key reaches every app.
 5. **App mailboxes:** forward the selling apps' mailboxes after a check (recommended), a two-day reminder (a withdrawal
@@ -475,8 +495,11 @@ event stored (not with option 0), a real reply filed.
 - Two of the other mail-sending apps have not answered yet; their answers fold in at the next round.
 - Whether the payment provider's own receipt can carry part of the documents duty: not confirmed with the provider (a
   "needs first" of phase 1).
-- The vendor's suppression list, webhook signature and log retention, or with option 0 the account's daily sending
-  limit: read in the vendor's documentation in phase 0.
+- The vendor's suppression list, webhook signature and log retention: read in the vendor's documentation in phase 0.
+- For option 0, the account's daily sending limit and whether today's path already has the Apple relay registration:
+  read by operations before the final version goes to the owner.
+- Each selling app's sale-event sender and its webhook terms (timeout, re-delivery window): read before that app's
+  phase 1.
 
 ## 14. Requirements carried from earlier work and the apps' answers (must not be lost)
 
@@ -506,9 +529,11 @@ event stored (not with option 0), a real reply filed.
   given up, never sent late, at night or in bulk because of a retry).
 - The language comes from the account (some apps write German as well as English and Turkish; some write only English
   and Turkish); absolute `https://` links; plain text, with an optional HTML part of the same words.
-- Send only from the app's own address; the app's throttles and quiet hours stay in the app.
-- A selling app calls inside its sale-event handling, caps that wait below the timeout of whatever sends it the sale
-  event, answers that webhook with an error until Ulak's `202`, and never marks a sale processed before it. Once a day
+- Send only from the app's own address, and set no Reply-To (Ulak sets it, 7.1); the app's throttles and quiet hours
+  stay in the app.
+- A selling app (200-350 lines of its own in phase 1) makes only the legal-document call inside its sale-event
+  handling and sends every other mail after the webhook is answered; it caps that wait below the timeout of whatever
+  sends it the sale event, answers that webhook with an error until Ulak's `202`, and never marks a sale processed before it. Once a day
   it reconciles the completed sales against Ulak over that sender's re-delivery window plus a day, lists any sale without a linked
   acceptance as an alert, and pings the owner if the job has not completed a run in 36 hours (5.4).
 - The sending-health check waits at most 2 seconds and counts no answer as `ok` (5.2).
