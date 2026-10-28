@@ -65,7 +65,8 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
 - **The spec is APPROVED** ("Approve, start phase 0 (Recommended)", `9366f0c`). Letters:
   FabervantOps (decisions 3-8, the approval, what phase 0 needs from it), GRIDIGMA and TEGlyx (spec
   approved, current contract unchanged, they are written to before their mails move). FabervantOps's
-  gate letter archived.
+  gate letter archived. Its "approval noted; phase-0 items" letter read and archived: the account
+  opens under the owner's login (FabervantOps asks him), DNS and processors row follow the account.
 - No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
