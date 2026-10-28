@@ -36,6 +36,8 @@ Phase 0 of the approved communication spec (O2) built, reviewed and committed; n
   secret key"). After the wrap-up its two sentences arrived (vendor log 60 days without text; transfer abroad) and
   went in word for word (`e2b3d13`), with "content storage off" added to the console steps; read 4 closed for section
   A and "Where". FabervantOps added the vendor's processors row.
+- **Vendor account:** asked whether to open it under his own Zoho login, the owner answered "why don't we handle this
+  with COO?"; his words were sent to FabervantOps, which takes the account up with him.
 - **Letters:** to FabervantOps: phase 0 built, read 4 draft, four vendor facts (including that its mail gate missed the
   `cpaas.zoho.*` host; it added it, read back in `mail_vendor_gate.py`); then the fixes applied.
 
