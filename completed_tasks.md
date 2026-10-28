@@ -46,7 +46,12 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
   today and its mail HTML has no images); FabervantOps S256 read `62f5353` as consistent with one low,
   fixed as its first option: the reconciliation look-back is never less than two days (`ba2e91c`).
   Told FabervantOps; its re-read of `cd15ec1..ba2e91c` is what remains.
-- No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`.
+- FabervantOps S256: `fdcb269` AGREED, with its two option-0 reads, folded in (`e82a60e`): the
+  current account has one outgoing quota of 50-500 mails an hour shared by every app and the
+  company's own mail, no bursts, up to an hour's stop when exceeded; the Apple relay registration
+  already covers the company domain. With GRIDIGMA's AGREED, the spec is marked the final version
+  for the owner's approval (`ce045ca`).
+- No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
 
