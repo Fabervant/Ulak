@@ -33,7 +33,9 @@ Phase 0 of the approved communication spec (O2) built, reviewed and committed; n
   and 9 in the review fixes each turned the mail tests red, tree restored each time.
 - **Privacy template** (legal read 4): draft sent; FabervantOps's six fixes applied in `docs/privacy-statement.md`
   (10-year copies from the end of the purchase year, a legal ground per section, "a code made from your address with a
-  secret key"); the vendor-log and transfer-abroad sentences wait on FabervantOps's figures.
+  secret key"). After the wrap-up its two sentences arrived (vendor log 60 days without text; transfer abroad) and
+  went in word for word (`e2b3d13`), with "content storage off" added to the console steps; read 4 closed for section
+  A and "Where". FabervantOps added the vendor's processors row.
 - **Letters:** to FabervantOps: phase 0 built, read 4 draft, four vendor facts (including that its mail gate missed the
   `cpaas.zoho.*` host; it added it, read back in `mail_vendor_gate.py`); then the fixes applied.
 
