@@ -4,8 +4,9 @@
 
 Status: final version, 2026-10-28 (Session 13). Draft 1 (2026-10-24) and draft 2 (`22664db`) were reviewed by the
 first client application and by company operations; draft 3 answered their findings and was **agreed by both**
-(the first client at `fdcb269`, operations at `fdcb269` plus its last two reads, folded in after). Two of the other
-mail-sending apps have not answered the question "what do you send and receive". Next: the owner's approval.
+(the first client at `fdcb269`, operations at `fdcb269` plus its last two reads, folded in after). The last two
+mail-sending apps answered the question "what do you send and receive" on 2026-10-29, after the approval; their
+answers are folded into sections 0, 13 and 14 and change no phase or decision.
 **Nothing in this document is built before the owner approves it.**
 
 This repository is public: this document names no other project, person or deployment host, and
@@ -23,10 +24,12 @@ something fails. The apps keep their own words and their own timing.
 mail account from each app's own address, and no second mail vendor is used. Options 1 and 2 (decision 1) add a sending
 service; option 0 keeps the current account. This is his decision.
 
-**What the apps send today** (their own answers; two apps have not answered): about eight apps send mail. Most send only
+**What the apps send today** (their own answers, every app has answered): about eight apps send mail. Most send only
 the sign-in mails (confirm your address, reset your password, "someone tried to sign up with your address", "a sign-in
 was added"); a few also send others (payment receipts, a mail that closes an account, a warning before an unused
-account is removed, game mails). None sends marketing. Volume, all apps together, as the apps estimate it (none keeps a
+account is removed, game mails, a daily digest the person opted into). None sends marketing; one has a launch list
+(double opt-in, recorded consent) built and switched off until its consent registration is confirmed. One also sends
+opt-in event alerts to the person's own chat through its own Telegram bot; they stay in the app (option O9). Volume, all apps together, as the apps estimate it (none keeps a
 send log to count from): well under 1,000 mails a month.
 
 **Base (what the brief and the law need):**
@@ -467,6 +470,7 @@ event stored (not with option 0), a real reply filed.
 |---|---|---|
 | O1 | Push through Ulak (section 6) | about 6 files / 400 lines |
 | O2 | Store reviews (7.4) | about 8 files / 600 lines |
+| O9 | Chat alerts: an app's opt-in event alerts to the person's own Telegram chat go through Ulak instead of the app's own bot. **Owner, Session 15: stays in the app** ("Stays in the app (Recommended)"); looked at again if more apps send chat alerts | not sized |
 | O3 | Ulak's own suppression list with a lift button (if the vendor's is enough, not needed; with vendor option 0, it would have to read bounce mails) | about 3 files / 150 lines |
 | O4 | Outbox day and week counts, and "retry now" | about 2 files / 120 lines |
 | O5 | `GET /v1/mail/:id`: the app reads one mail's state (useful for a notice whose loss shortens someone's notice period) | about 2 files / 80 lines |
@@ -508,7 +512,7 @@ event stored (not with option 0), a real reply filed.
 
 ## 13. Open inputs
 
-- Two of the other mail-sending apps have not answered yet; their answers fold in at the next round.
+- Every mail-sending app has answered (the last two on 2026-10-29); nothing is outstanding from the apps.
 - Whether the payment provider's own receipt can carry part of the documents duty: not confirmed with the provider (a
   "needs first" of phase 1).
 - The vendor's suppression list, webhook signature and log retention: read in the vendor's documentation in phase 0.
@@ -553,3 +557,9 @@ event stored (not with option 0), a real reply filed.
 - The sending-health check waits at most 2 seconds and counts no answer as `ok` (5.2).
 - A mail the app must send at a fixed moment (for example a notice that states how long data is kept) is sent at that
   moment; Ulak does not delay it.
+- A launch list or any mail sent because the person consented to hear about a product is commercial (5.6): it stays in
+  the app, with its consent records, register entries and free withdrawal, while commercial mail is off in Ulak.
+- The app's words stay the app's: Ulak never adds to, wraps or rewrites a body, so an alert never gains promotion and a
+  service mail never reads as advice or as a confirmation of something the app does not do.
+- An app whose privacy text names the company's existing mail provider moves a flow to Ulak only after that text names
+  the vendor Ulak uses (operations reads the change first; 10.1, phase 3).
