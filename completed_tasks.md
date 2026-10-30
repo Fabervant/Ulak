@@ -1,5 +1,29 @@
 # Completed tasks
 
+## Session 15 — 2026-10-30
+
+Mailbox cleared, the last two apps' answers folded into the spec, phase 1 planned; phase 0 still waits on the account.
+
+- **Mailbox.** Seven letters, all acted on and archived: Astrolect S86 and TradeComrade S769 (their late answers to the
+  2026-10-24 question) folded into the spec (`ae6eaa7`: sections 0, 13, 14; launch lists are commercial and stay in the
+  app; Ulak never alters a body; an app moves a flow only after its privacy text names the vendor) and answered;
+  FabervantOps S256/S257 (the account opens under the owner's Zoho login) noted and answered; S259 (draw HOME INDEX)
+  answered as not applicable (Ulak has no public screen; a search of src, test and docs found no Home Index text);
+  S260 (account not opened, no CPaaS DNS record as of 14:00) and S260 (Home Index v1.4 lean checks, no reply asked;
+  folded into the phase 1 admin page).
+- **Owner, TradeComrade's Telegram alerts:** "Stays in the app (Recommended)": recorded as option O9 (off) in the spec,
+  TradeComrade told.
+- **Phase 0 ship:** blocked; asked FabervantOps (owner: "COO is live"), whose S260 answer is that the account, the
+  validation form and the DNS are all not done yet.
+- **Owner: "Plan phase 1 now (Recommended)".** Plan `docs/superpowers/plans/2026-10-30-phase-1-legal-documents.md`
+  (`9481ac4`): the copy table written once and stamped by guarded statements, alerts as rows, idempotency keys scoped
+  by kind, the keeping period and the retry window as settings the legal reads fill. Stress test: the owner chose
+  "Daily reminder (Recommended)" for open alerts. An independent reviewer found 2 high, 7 medium, 8 low; all folded in
+  (the plan's last section lists them). Legal reads 3, 6, 11 and the receipt check asked of FabervantOps
+  (`letters/FabervantOps/2026-10-30-ulak-s15-phase-1-reads-3-6-11.md`). Not built: built after phase 0 ships.
+- **Intermittent mail test:** 15 full-suite runs, 15 passed (35 of 35 since S14's fixes); not reproduced. Full suite
+  after the doc changes: 21 files, 399 tests passed.
+
 ## Session 14 — 2026-10-28
 
 Phase 0 of the approved communication spec (O2) built, reviewed and committed; not deployed.
