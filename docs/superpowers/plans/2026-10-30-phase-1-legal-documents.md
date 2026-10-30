@@ -8,13 +8,26 @@ the admin panel, and the copy's own keeping period that outlives a deletion requ
 **Started:** the owner, Session 15: "Plan phase 1 now (Recommended)", while phase 0 waits on the vendor account.
 **Built only after phase 0 has shipped** (decision 8: phases in order); this plan is written and stress-tested now.
 
-**Goes live only after:** phase 0 live; legal reads 3 (keeping period), 6 (deadline) and 11 (evidence, HTML part,
-the definition's exact sentence), and the payment provider's receipt check, all asked of operations on 2026-10-30;
-each selling app's own side (its sale handler, its daily reconciliation, its mailed form read by operations in Turkish
-and English). Ulak's part is built and tested before those; the reads change settings, not code (see "Settings").
+**Goes live only after:** phase 0 live; each selling app's own side (its sale handler, its daily reconciliation, its
+subscription-end call, its mailed form read by operations in Turkish and English). Ulak's part is built and tested
+before those.
 
-**Not in phase 1:** HTML parts or attachments on a legal document (decision 2: plain text; read 11 may reopen the HTML
-part), templates or figures computed by Ulak (never), anything of the app's own side (each app builds it).
+**Legal reads answered by operations (2026-10-30, a legal reading, not advice):**
+- Read 3: keep each copy **3 years** (Distance Contracts Regulation art 20(1)), counted from **the end of the
+  subscription** (for a one-off sale, the sale), so every renewal's records last 3 years after it; the ground to
+  outlive a deletion request is KVKK art 5(2)(ç) with 5(2)(e) (operations marks it to verify). Whether TTK art 82
+  (10 years) applies is on operations' lawyer list; until answered, 3 years. The period stays one setting.
+- Read 6: no after-sale deadline for a sale on a screen; the weight sits on the checkout screens before payment. Send
+  at once; the 24-hour `expires_at` with the one-hour ping is right as an operating window.
+- Read 11: the definition names e-mail, so the plain-text mail is a durable medium. The delivered event with the copy is
+  enough evidence; keep together the exact text and its hash, the send time, and the delivered event with its time and
+  the receiving server. An HTML part is not forbidden, but refusing it is the simpler safe choice: refused.
+- The receipt check: the payment provider's receipt carries none of the pre-information form, the contract or the
+  withdrawal right, and no Turkish; phase 1 does not shrink. Plan as if the company is the seller; operations reports
+  if the provider's answer on the seller of record changes that.
+
+**Not in phase 1:** HTML parts or attachments on a legal document (decision 2: plain text; read 11: refused),
+templates or figures computed by Ulak (never), anything of the app's own side (each app builds it).
 
 ## What phase 0 already gives
 
@@ -44,10 +57,13 @@ idempotency_key TEXT NOT NULL   -- the sale's id; unique per app for the copy's 
 label TEXT NOT NULL, locale TEXT NOT NULL
 user_ref TEXT                   -- the app's account id, for finding; nulled by a deletion request
 to_addr TEXT NOT NULL, subject TEXT NOT NULL, text_body TEXT NOT NULL   -- the exact copy, as sent
+text_sha256 TEXT NOT NULL       -- hex SHA-256 of subject and text as sent, for proving the copy unchanged (read 11)
 addr_hash TEXT NOT NULL
 created_at TEXT NOT NULL
+keep_from TEXT                  -- the keeping period's start (read 3): the sale for a one-off, the subscription's
+                                -- end once the app reports it; null = kept until it is reported
 sent_at TEXT, vendor_request_id TEXT   -- stamped once, when the vendor accepted it
-delivered_at TEXT                      -- stamped once, when Ulak received the vendor's delivered event
+delivered_at TEXT, delivered_server TEXT  -- stamped once, from the vendor's delivered event (its receiving server, if given)
 
 legal_alerts                    -- one row per problem with one copy
 id TEXT PRIMARY KEY
@@ -69,8 +85,8 @@ row can collide before this migration).
 
 | Name | Kind | Meaning | Until its read |
 |---|---|---|---|
-| `LEGAL_KEEP_DAYS` | var | the copy's keeping period, from `created_at` (read 3) | unset: `legal_document` is refused `422 kind_not_allowed`, so no copy is kept under a guessed period |
-| `LEGAL_EXPIRY_HOURS` | var | how long Ulak keeps trying (read 6) | 24, the spec's interim |
+| `LEGAL_KEEP_DAYS` | var | the copy's keeping period, from `keep_from` (read 3: 3 years, so `1096`) | unset: `legal_document` is refused `422 kind_not_allowed`, so no copy is kept under a guessed period |
+| `LEGAL_EXPIRY_HOURS` | var | how long Ulak keeps trying (read 6: 24 confirmed) | 24 |
 
 `legalConfig(env)`: `LEGAL_KEEP_DAYS` a whole number of at least 1; `LEGAL_EXPIRY_HOURS` a whole number from 1 to 72,
 24 when unset. Any other value is a bad setting: the legal path answers `500 legal_config_bad`, and the 5-minute
@@ -85,8 +101,10 @@ saving the form keeps both (review M4: today's form rebuilds `mail_kinds` from o
 ### `POST /v1/mail` with `kind: legal_document` (spec 5.1, 5.2, 5.3)
 
 Validation adds, on `legal_document` only:
-- `document` required: `{ version, reference }`, each matching `[A-Za-z0-9._:/-]{1,64}`; refused on `transactional`.
-- `html` refused with `422 bad_html` ("a legal document is plain text") until read 11 says otherwise.
+- `document` required: `{ version, reference, sale }`, `version` and `reference` each matching
+  `[A-Za-z0-9._:/-]{1,64}`, `sale` either `one_off` (the copy's `keep_from` is set to its `created_at`) or
+  `subscription` (`keep_from` stays null until the app reports the end); refused on `transactional`.
+- `html` refused with `422 bad_html` ("a legal document is plain text"; read 11).
 - `expires_at` at most `LEGAL_EXPIRY_HOURS` ahead (`validateMail` takes the limit as a parameter).
 - No per-recipient ceiling (5.3: exempt): the legal insert is its own statement without the ceiling, and legal rows
   are not counted in the transactional ceiling.
@@ -114,7 +132,7 @@ and replays do not matter (review M2).
 | vendor refused the address (`refused`) | - | open `held` |
 | vendor called it malformed (`failed`) | - | open `failed` |
 | `expires_at` passed unsent (`given_up`) | - | open `given_up` |
-| delivered event | `delivered_at` where null, found by mail id or vendor id **in `legal_documents`**, even when the `mails` row is gone or given up | the open `undelivered` alert closes itself |
+| delivered event | `delivered_at` (and `delivered_server` when the event names it) where null, found by mail id or vendor id **in `legal_documents`**, even when the `mails` row is gone or given up | the open `undelivered` alert closes itself |
 | hard bounce | - | open `bounced` |
 | spam complaint | - | none: the mail reached the mailbox; the address is suppressed as in phase 0 |
 | soft bounce | - | none: the vendor goes on trying; `undelivered` covers it |
@@ -161,7 +179,13 @@ at the fifth are two alerts, each told once (review H1).
 
 ### Deletion and keeping (spec 8)
 
-- The hourly job deletes copies whose `created_at` is older than `LEGAL_KEEP_DAYS` at that run, in slices; their
+- **The subscription's end** (read 3): `POST /v1/mail/legal/end` (send key, `Origin` refused), body
+  `{ reference, ended_at }`, sets `keep_from` on every copy of that app and reference whose `keep_from` is null, so a
+  renewal's documents share the subscription's end. `ended_at` is ISO and not in the future; a repeat changes nothing;
+  `{ updated: n }`. The app calls it when the subscription ends (its daily reconciliation also reports the ends it
+  finds, so a missed call is made up the next day). A copy whose end is never reported is kept: never deleted early,
+  and the admin `/legal` page counts copies with no end older than 400 days, for the operator to ask the app.
+- The hourly job deletes copies whose `keep_from` is older than `LEGAL_KEEP_DAYS` at that run, in slices; their
   alerts go with them, open or not: the keeping period is the law's, and an alert still open at its end is moot
   (tested).
 - **Every deletion path** keeps the copies and nulls their `user_ref`: by `user_ref` (`deleteUser`, called from the
@@ -189,8 +213,9 @@ Nothing of a copy is logged but its mail id, app, label and alert kind.
    legal document sharing one key in both orders.
 2. Settings: `legalConfig(env)` with a table test for each bad value; `legal_config` in `service_state` and the red
    health check, red on a planted bad value, then green; the admin `mail_legal` tick, refused while unset, kept on save.
-3. Validation: `document` and its character set, `html` refused, the legal expiry parameter, `SENDABLE_KINDS` gains
-   `legal_document`; table-driven tests.
+3. Validation: `document` with its character set and `sale`, `html` refused, the legal expiry parameter,
+   `SENDABLE_KINDS` gains `legal_document`; table-driven tests. The copy's `text_sha256` computed at insert, with a
+   test that the download's body hashes to it.
 4. `src/core/mail/legal.ts`: the insert batch (queued, or closed and `held` when suppressed), the ceiling exemption
    (11 legal mails to one address all accepted), the repeat answer; tests including a parallel duplicate key and
    repeats after `held`, `given_up` and 8 days.
@@ -203,15 +228,18 @@ Nothing of a copy is logged but its mail id, app, label and alert kind.
    reference, subject or version, and that `console` output holds none either.
 7. Route: the legal path answers `202 queued` before the first attempt (a vendor double that blocks); the timer sends
    a mail whose `waitUntil` attempt never ran; every repeat answers `202 queued`.
-8. Deletion: all four paths keep copies and queued legal rows and null `user_ref`, each answer's counts; the hourly
-   job deletes by the setting at run time (raising the setting keeps a copy that the lower one would have deleted);
+8. Deletion: all four paths keep copies and queued legal rows and null `user_ref`, each answer's counts;
+   `POST /v1/mail/legal/end` (sets only null `keep_from`, one app's call never touches another's copies, a future
+   `ended_at` refused); a subscription copy with no end is never deleted; the hourly job deletes by the setting at run
+   time (raising the setting keeps a copy that the lower one would have deleted);
    `retention_days` leaves copies.
 9. Admin `/legal`: alerts, search with its limit, close, the download's headers and filename with a planted
    reference holding a quote; a test that renders every view with a planted address and body and finds neither.
 10. Docs: `docs/client-contract.md` (the legal call, `document`, the always-`queued` answer, repeats, keys scoped by
     kind, the app's side from spec 5.4 and 14: the sale handler's capped wait, answer the webhook with an error until
-    Ulak's `202`, the daily reconciliation with its look-back and 36-hour ping), `docs/self-hosting.md` (the two
-    settings), `wrangler.api.jsonc.example`.
+    Ulak's `202`, the daily reconciliation with its look-back and 36-hour ping, the subscription-end call and the
+    reconciliation's report of ends), `docs/self-hosting.md` (the two settings, `LEGAL_KEEP_DAYS=1096`),
+    `wrangler.api.jsonc.example`.
 11. Independent review of the whole diff by a fresh reviewer; planted defects (mutations) on the insert batch, the
     repeat check, the stamp guards, the alert opener, the deletion exemption and the download headers, each caught by
     a test.
@@ -256,3 +284,10 @@ answer is `202 queued` (M5); all four deletion paths are named (M6); the expiry 
 ceiling exemption, delivered evidence keyed on the copy, the daily reminder's claim, the guarded one-hour opener, the
 download filename, the search limit and the leak tests (L1-L8). `delivery_code` was dropped: the delivered event
 carries no code today.
+
+## Changes after operations' legal reads (Session 15)
+
+Operations answered reads 3, 6, 11 and the receipt check the same day (see the header). Folded in: `LEGAL_KEEP_DAYS`
+is 3 years counted from `keep_from` (the sale for a one-off, the subscription's end, reported by the new
+`POST /v1/mail/legal/end`), never from `created_at`; `document.sale` says which; the copy keeps `text_sha256` and the
+delivered event's receiving server; the 24-hour window and the HTML refusal stand; phase 1 does not shrink.

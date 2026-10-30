@@ -21,6 +21,11 @@ Mailbox cleared, the last two apps' answers folded into the spec, phase 1 planne
   "Daily reminder (Recommended)" for open alerts. An independent reviewer found 2 high, 7 medium, 8 low; all folded in
   (the plan's last section lists them). Legal reads 3, 6, 11 and the receipt check asked of FabervantOps
   (`letters/FabervantOps/2026-10-30-ulak-s15-phase-1-reads-3-6-11.md`). Not built: built after phase 0 ships.
+- **Legal reads 3, 6, 11 and the receipt check answered** (FabervantOps S260, same day; letter archived) and folded
+  into the phase 1 plan: copies kept 3 years from the subscription's end (the sale for a one-off), reported by a new
+  `POST /v1/mail/legal/end`, a copy with no end never deleted; `text_sha256` and the receiving server kept as evidence;
+  24-hour window and HTML refusal confirmed; the provider's receipt does not shrink phase 1. TTK art 82 (10 years) is on
+  operations' lawyer list.
 - **Intermittent mail test:** 15 full-suite runs, 15 passed (35 of 35 since S14's fixes); not reproduced. Full suite
   after the doc changes: 21 files, 399 tests passed.
 
