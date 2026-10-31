@@ -12,6 +12,8 @@ Still no ship: every kickoff item waits on Zoho's validation of the CPaaS accoun
   and `npm test` with ENOENT. Red first: with `docs/self-hosting.md` deleted unstaged the script exited 1 with
   ENOENT; after the fix it exited 0 and left the file out of the manifest (124 files, 125 restored). `npm test`:
   23 files, 504 tests passed, exit 0; `tsc --noEmit` exit 0. The skipped_issues entry is deleted.
+  Committed `db83798`, CI `ci` green on it (run 41237362126; CI does not deploy). Re-read after the wrap-up:
+  the old script exits 1 with ENOENT on the planted deletion, the new one exits 0; `npm test` 504 passed, tsc 0.
 
 ## Session 18 — 2026-10-31
 
