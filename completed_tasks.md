@@ -29,12 +29,11 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
   at each attempt until the vendor accepts the mail and never after; the copy download ends with it as mailed; the
   app's text is now kept byte for byte in the mail (no trailing-space trim), so the download body equals the mailed
   text. 504 tests pass; 4 planted defects all caught. Answered (`letters/FabervantOps/2026-10-31-ulak-s17-sender-block-in-copy-built.md`), letter archived.
-- **Letter: FabervantOps S264 "CPaaS domain verified":** the owner opened the account (cpaas.zoho.eu, EU);
-  fabervant.com verified with DKIM selector `ulak` and bounce CNAME `bounce-zem` -> `cluster89.zeptomail.eu`, both
-  read back by Ulak (DKIM via 1.1.1.1; the CNAME through Cloudflare's and Google's DNS-over-HTTPS; plain `nslookup`
-  to 8.8.8.8 said non-existent, a local resolver quirk). Answered: Sender Address Restriction on with exactly
-  `gridigma@fabervant.com` and `teglyx@fabervant.com`; asked whether the owner has registered fabervant.com in
-  Apple's Email Sources (needed for the hidden-address acceptance); the token and webhook key by the Agent inbox.
+- **Letter: operations "CPaaS domain verified":** the owner opened the vendor account in its EU data centre; the
+  sending domain is verified (DKIM and the bounce CNAME), both records read back by Ulak through public resolvers
+  and DNS-over-HTTPS (details in the gitignored memory). Answered: the vendor's sender-address restriction on with
+  exactly the two client apps' `<app id>@` addresses; asked whether the owner has registered the domain in Apple's
+  Email Sources (needed for the hidden-address acceptance); the token and webhook key by the operator's secret inbox.
   Self-hosting gained the restriction step. Letter archived.
 - **Found:** main already holds phase 1 and migrations 0006-0007, so the phase 0 ship's migrate and deploy carry them;
   recorded in MEMORY with the order to send both clients the phase 1 letter and the sender-block note before the
