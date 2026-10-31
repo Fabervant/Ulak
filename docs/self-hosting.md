@@ -219,7 +219,7 @@ SHA-256 of the text) for a keeping period you set, also after a deletion request
 
 | Name | Value |
 |---|---|
-| `LEGAL_KEEP_DAYS` | the keeping period in days, counted from the sale (one-off) or the subscription's end; for example `1096` for three years. Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period |
+| `LEGAL_KEEP_DAYS` | the keeping period in days, counted from the sale (one-off) or the subscription's end; for example `1096` for three years; at least `365`, so a typo is refused rather than deleting copies. Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period |
 | `LEGAL_EXPIRY_HOURS` | optional: how long Ulak keeps trying to send one, 1 to 72; 24 when unset |
 
 A value outside its range makes legal calls answer `500 legal_config_bad` and turns the result check
