@@ -1,5 +1,18 @@
 # Completed tasks
 
+## Session 19 — 2026-10-31
+
+Still no ship: every kickoff item waits on Zoho's validation of the CPaaS account (about 2026-11-05), a client or the owner.
+
+- **Mailbox:** empty (read at 23:04). TEGlyx's S17 deploy letter is still unarchived in its folder: its answer on
+  point 1 is still owed. Agent inbox: empty (no Send Mail token, no webhook key).
+- **Phase 0 ship, phase 1 deploy, O1 notice, phase 2 heads-up:** blocked as in S18, each re-read at its source.
+- **Task that waited on nobody: the hygiene script crash (skipped_issues, S11).** `scripts/hygiene-manifest.mjs`
+  now skips a tracked file that is deleted but not yet staged instead of crashing `npm run hygiene`, `typecheck`
+  and `npm test` with ENOENT. Red first: with `docs/self-hosting.md` deleted unstaged the script exited 1 with
+  ENOENT; after the fix it exited 0 and left the file out of the manifest (124 files, 125 restored). `npm test`:
+  23 files, 504 tests passed, exit 0; `tsc --noEmit` exit 0. The skipped_issues entry is deleted.
+
 ## Session 18 — 2026-10-31
 
 Nothing could ship: phase 0 waits on Zoho's validation of the CPaaS account (owner: "we're waiting for validation
