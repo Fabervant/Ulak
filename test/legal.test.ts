@@ -15,6 +15,7 @@ import {
   legalConfig,
   openUndelivered,
   remindOpenAlerts,
+  stampSent,
   tellAlerts,
   SEARCH_LIMIT,
   type LegalDocument,
@@ -429,6 +430,14 @@ describe("task 5: stamps and alerts on every transition", () => {
     expect((await copy(id))!).toMatchObject({ delivered_at: c.delivered_at, delivered_server: "mx.example.org" });
   });
 
+  it("the acceptance is stamped once: a second stamp keeps the first time and id", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    const first = (await copy(id))!;
+    await stampSent(env.DB, id, addMinutes(nowIso(), 5), "req-again");
+    expect((await copy(id))!).toMatchObject({ sent_at: first.sent_at, vendor_request_id: "req-1" });
+  });
+
   it("a receiving server that is not shaped as a host is not kept", async () => {
     const key = await legalApp();
     const id = await idOf(await sendLegal(key));
@@ -680,6 +689,17 @@ describe("task 8: deletion and keeping", () => {
     const byAddr = await call("/v1/mail/delete", key, { address: ADDRESS });
     expect(await byAddr.json()).toEqual({ deleted_mails: 1, kept_legal_copies: 2 });
     expect((await env.DB.prepare("SELECT COUNT(*) n FROM legal_documents WHERE user_ref IS NULL").first<{ n: number }>())!.n).toBe(2);
+  });
+
+  it("deleting by address keeps a still-queued legal mail, which is still sent", async () => {
+    const key = await legalApp();
+    replies.push(down);
+    const queued = await idOf(await sendLegal(key));
+    const receipt = await idOf(await call("/v1/mail", key, { ...legalBody({ kind: "transactional", label: "receipt" }), document: undefined }));
+    expect(await (await call("/v1/mail/delete", key, { address: ADDRESS })).json()).toEqual({ deleted_mails: 1, kept_legal_copies: 1 });
+    expect(await mailRow(receipt)).toBeNull();
+    expect(await mailRow(queued)).toMatchObject({ status: "queued", user_ref: null });
+    expect((await runOutbox(lenv(), addMinutes(nowIso(), 6))).sent).toBe(1);
   });
 
   it("the admin JSON API's deletion answers the kept count", async () => {
