@@ -1,5 +1,19 @@
 # Completed tasks
 
+## Session 18 — 2026-10-31
+
+Nothing could ship: phase 0 waits on Zoho's validation of the CPaaS account (owner: "we're waiting for validation
+from Zoho for cpaas. It can take more than 1 day").
+
+- **Mailbox:** empty. TEGlyx has not yet read the S17 letter on the mail deploy (still unarchived in its folder), so
+  its answer on point 1 is still owed.
+- **Phase 0 ship:** blocked. Agent inbox empty (no Send Mail token, no webhook key). FabervantOps' memory: the
+  validation form was submitted in its S263, Zoho answers by about 2026-11-05; the console steps stay with the owner.
+- **Wrangler remote access works again** (the S17 `7403` is gone): `wrangler d1 migrations list ulak --remote` lists
+  0005, 0006 and 0007 as pending; the API's last deployment is 2026-10-24, so the live state is still `0e18799`.
+- **Phase 1 deploy, O1 notice, phase 2 heads-up:** wait on phase 0, the first client, and phases 0-1 being live.
+- **Health check:** `npm test` on main: 23 files, 504 tests passed, exit 0.
+
 ## Session 17 — 2026-10-31
 
 Everything still waits on the CPaaS account; the owner chose to wait on phase 2 too.
