@@ -241,7 +241,7 @@ app.get("/legal", async (c) => {
 
 app.post("/legal/alerts/:id/close", async (c) => {
   const f = await readForm(c);
-  await closeAlert(c.env.DB, c.req.param("id"), f.reason ?? "", f.replaced_by ?? null, nowIso());
+  await closeAlert(c.env.DB, c.req.param("id"), f.reason ?? "", f.replaced_by ?? null, nowIso(), c.get("admin").sub);
   return c.redirect("/legal", 303);
 });
 
@@ -249,6 +249,8 @@ app.post("/legal/alerts/:id/close", async (c) => {
 app.get("/legal/:mail_id/copy", async (c) => {
   const doc = await getLegal(c.env.DB, c.req.param("mail_id"));
   if (!doc) return c.text("not found", 404);
+  // Who downloaded which copy: ids only, never its content.
+  console.log("legal copy downloaded", JSON.stringify({ mail_id: doc.mail_id, app: doc.app, admin: c.get("admin").sub }));
   return c.body(copyText(doc), 200, {
     "content-type": "text/plain; charset=utf-8",
     "content-disposition": `attachment; filename="legal-${doc.mail_id}.txt"`,

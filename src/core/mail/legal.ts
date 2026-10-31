@@ -17,6 +17,9 @@ export interface LegalConfig {
 }
 
 export const DEFAULT_LEGAL_EXPIRY_HOURS = 24;
+/** No legal keeping duty is shorter than a year; a smaller value is a typo (109 for 1096) that would
+ *  delete copies within the hour, so it is a bad setting, not a period. */
+export const MIN_LEGAL_KEEP_DAYS = 365;
 export const MAX_LEGAL_EXPIRY_HOURS = 72;
 
 export class LegalConfigError extends Error {}
@@ -36,7 +39,7 @@ export function legalConfig(env: Env): LegalConfig | null {
   }
   if (!keepRaw) return null;
   const keepDays = wholeNumber(keepRaw);
-  if (keepDays === null || keepDays < 1) throw new LegalConfigError("LEGAL_KEEP_DAYS must be a whole number of at least 1");
+  if (keepDays === null || keepDays < MIN_LEGAL_KEEP_DAYS) throw new LegalConfigError(`LEGAL_KEEP_DAYS must be a whole number of at least ${MIN_LEGAL_KEEP_DAYS}`);
   return { keepDays, expiryHours };
 }
 
@@ -189,10 +192,51 @@ export async function stampDelivered(db: D1Database, ref: string | null, request
   const doc = await db.prepare(`SELECT mail_id FROM legal_documents WHERE ${where}`).bind(key).first<{ mail_id: string }>();
   if (!doc) return false;
   const [stamp] = await db.batch([
-    db.prepare("UPDATE legal_documents SET delivered_at=?, delivered_server=? WHERE mail_id=? AND delivered_at IS NULL").bind(now, server, doc.mail_id),
+    db.prepare("UPDATE legal_documents SET delivered_at=COALESCE(delivered_at,?1), delivered_server=COALESCE(delivered_server,?2) WHERE mail_id=?3 AND (delivered_at IS NULL OR (delivered_server IS NULL AND ?2 IS NOT NULL))").bind(now, server, doc.mail_id),
     db.prepare("UPDATE legal_alerts SET closed_at=?, close_reason='delivered' WHERE mail_id=? AND kind='undelivered' AND closed_at IS NULL").bind(now, doc.mail_id),
   ]);
   return (stamp!.meta.changes ?? 0) > 0;
+}
+
+/** Any event of the vendor proves it took the mail. When the attempt's own stamp was lost (its write
+ *  lost the lease to this very event, or the Worker stopped between the two), the event's time and
+ *  the vendor's id are kept as the acceptance: an upper bound, never later than the truth by more
+ *  than the event's delay. */
+export async function stampSentFromEvent(db: D1Database, mailId: string, requestId: string | null, now: string): Promise<void> {
+  await db
+    .prepare("UPDATE legal_documents SET sent_at=COALESCE(sent_at,?1), vendor_request_id=COALESCE(vendor_request_id,?2) WHERE mail_id=?3 AND (sent_at IS NULL OR vendor_request_id IS NULL)")
+    .bind(now, requestId, mailId)
+    .run();
+}
+
+/** The 5-minute repair of what a stopped Worker can leave undone between two writes: an acceptance
+ *  the transport row holds but the copy does not, and an alert a closed transport row calls for but
+ *  that was never opened. Each is idempotent, so the request's own path and this one never double. */
+export async function repairLegal(db: D1Database, now: string): Promise<number> {
+  const stamped = (
+    await db
+      .prepare(
+        `UPDATE legal_documents SET
+           sent_at=(SELECT m.sent_at FROM mails m WHERE m.id=legal_documents.mail_id),
+           vendor_request_id=COALESCE(vendor_request_id,(SELECT m.vendor_request_id FROM mails m WHERE m.id=legal_documents.mail_id))
+         WHERE sent_at IS NULL AND EXISTS (SELECT 1 FROM mails m WHERE m.id=legal_documents.mail_id AND m.sent_at IS NOT NULL)`,
+      )
+      .run()
+  ).meta.changes;
+  const KIND = "CASE m.status WHEN 'refused' THEN 'held' WHEN 'failed' THEN 'failed' ELSE 'given_up' END";
+  const due = (
+    await db
+      .prepare(
+        `SELECT m.id, ${KIND} kind FROM mails m JOIN legal_documents d ON d.mail_id=m.id
+         WHERE m.kind='legal_document' AND m.status IN ('refused','failed','given_up')
+         AND NOT EXISTS (SELECT 1 FROM legal_alerts x WHERE x.mail_id=m.id AND x.kind=${KIND}) LIMIT ?`,
+      )
+      .bind(ALERT_BATCH)
+      .all<{ id: string; kind: AlertKind }>()
+  ).results;
+  let opened = 0;
+  for (const r of due) if (await openAlert(db, r.id, r.kind, now)) opened += 1;
+  return stamped + opened;
 }
 
 /** The mail id of the copy the vendor knows by this id, for an event that names only the vendor's id. */
@@ -247,6 +291,7 @@ export interface AlertRow {
   opened_at: string;
   told_at: string | null;
   closed_at: string | null;
+  closed_by: string | null;
   close_reason: string | null;
   replaced_by: string | null;
 }
@@ -319,7 +364,7 @@ export const CLOSE_REASON_MAX = 500;
 /** Closes an open alert by hand with the operator's reason. `replacedBy`, when given, must be a
  *  delivered copy of the same app and reference: the app's corrected call is the remedy the spec
  *  names. A closed alert stays closed. */
-export async function closeAlert(db: D1Database, id: string, reason: string, replacedBy: string | null, now: string): Promise<void> {
+export async function closeAlert(db: D1Database, id: string, reason: string, replacedBy: string | null, now: string, closedBy: string | null = null): Promise<void> {
   const why = reason.trim();
   if (!why || [...why].length > CLOSE_REASON_MAX) throw invalid("reason", `reason must be 1 to ${CLOSE_REASON_MAX} characters`);
   const alert = await db
@@ -328,6 +373,9 @@ export async function closeAlert(db: D1Database, id: string, reason: string, rep
     .first<{ id: string; app: string; reference: string }>();
   if (!alert) throw new ApiError(404, "not_found", "no such open alert", false);
   const by = replacedBy?.trim() || null;
+  if (by && by === (await db.prepare("SELECT mail_id FROM legal_alerts WHERE id=?").bind(id).first<{ mail_id: string }>())?.mail_id) {
+    throw invalid("replaced_by", "replaced_by must be another copy than the one this alert is about");
+  }
   if (by) {
     const ok = await db
       .prepare("SELECT 1 x FROM legal_documents WHERE mail_id=? AND app=? AND reference=? AND delivered_at IS NOT NULL")
@@ -335,7 +383,7 @@ export async function closeAlert(db: D1Database, id: string, reason: string, rep
       .first();
     if (!ok) throw invalid("replaced_by", "replaced_by must be the mail id of a delivered copy of the same app and reference");
   }
-  const { meta } = await db.prepare("UPDATE legal_alerts SET closed_at=?, close_reason=?, replaced_by=? WHERE id=? AND closed_at IS NULL").bind(now, why, by, id).run();
+  const { meta } = await db.prepare("UPDATE legal_alerts SET closed_at=?, closed_by=?, close_reason=?, replaced_by=? WHERE id=? AND closed_at IS NULL").bind(now, closedBy, why, by, id).run();
   if (!meta.changes) throw new ApiError(404, "not_found", "no such open alert", false);
 }
 
@@ -422,6 +470,10 @@ export async function reportEnd(db: D1Database, app: string, raw: unknown, now: 
   if (typeof b.ended_at !== "string" || !isIso(b.ended_at)) throw invalid("ended_at", "ended_at must be ISO 8601");
   const ended = storedIso(b.ended_at);
   if (ended > now) throw invalid("ended_at", "ended_at may not be in the future");
+  // A subscription cannot end before its latest document was accepted; such a date is a bug that
+  // would start the keeping period years early and, once set, cannot be corrected by a repeat.
+  const newest = (await db.prepare("SELECT MAX(created_at) t FROM legal_documents WHERE app=? AND reference=? AND keep_from IS NULL").bind(app, b.reference).first<{ t: string | null }>())?.t;
+  if (newest && ended < newest) throw invalid("ended_at", "ended_at is earlier than the newest legal document of this reference");
   return (await db.prepare("UPDATE legal_documents SET keep_from=? WHERE app=? AND reference=? AND keep_from IS NULL").bind(ended, app, b.reference).run()).meta.changes;
 }
 

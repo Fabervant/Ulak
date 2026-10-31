@@ -41,6 +41,7 @@ CREATE TABLE legal_alerts (
   opened_at TEXT NOT NULL,
   told_at TEXT,
   closed_at TEXT,
+  closed_by TEXT,
   close_reason TEXT,
   replaced_by TEXT
 );

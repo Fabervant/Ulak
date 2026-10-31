@@ -181,10 +181,12 @@ describe("task 2: settings", () => {
     expect(cfg({ LEGAL_KEEP_DAYS: "  " })).toBeNull();
     expect(cfg({ LEGAL_KEEP_DAYS: "1096" })).toEqual({ keepDays: 1096, expiryHours: 24 });
     expect(cfg({ LEGAL_KEEP_DAYS: "3650", LEGAL_EXPIRY_HOURS: "72" })).toEqual({ keepDays: 3650, expiryHours: 72 });
-    expect(cfg({ LEGAL_KEEP_DAYS: "1", LEGAL_EXPIRY_HOURS: "1" })).toEqual({ keepDays: 1, expiryHours: 1 });
+    expect(cfg({ LEGAL_KEEP_DAYS: "365", LEGAL_EXPIRY_HOURS: "1" })).toEqual({ keepDays: 365, expiryHours: 1 });
   });
   for (const [name, over] of [
     ["keep 0", { LEGAL_KEEP_DAYS: "0" }],
+    ["keep under a year (109 typed for 1096)", { LEGAL_KEEP_DAYS: "109" }],
+    ["keep 364", { LEGAL_KEEP_DAYS: "364" }],
     ["keep negative", { LEGAL_KEEP_DAYS: "-5" }],
     ["keep fraction", { LEGAL_KEEP_DAYS: "1.5" }],
     ["keep words", { LEGAL_KEEP_DAYS: "3 years" }],
@@ -496,7 +498,7 @@ describe("task 5: stamps and alerts on every transition", () => {
     expect(lines.map((l) => l.split("\n")[0]).sort()).toEqual(["[shop] legal document bounced: open in the admin panel", "[shop] legal document undelivered: open in the admin panel"]);
   });
 
-  it("race: a bounce that lands mid-attempt wins; the attempt's late write records nothing on the copy", async () => {
+  it("race: a bounce that lands mid-attempt wins; the attempt's late write records nothing, the event records the acceptance", async () => {
     const key = await legalApp();
     let id = "";
     replies.push(async () => {
@@ -507,8 +509,69 @@ describe("task 5: stamps and alerts on every transition", () => {
     });
     await sendLegal(key);
     expect((await mailRow(id)).status).toBe("bounced");
-    expect((await copy(id))!).toMatchObject({ sent_at: null, vendor_request_id: null });
+    const c = (await copy(id))!;
+    expect(c.vendor_request_id).toBeNull(); // never the losing write's "req-late"
+    expect(c.sent_at).not.toBeNull(); // the bounce proves the vendor had it
     expect((await alerts(id)).map((x) => x.kind)).toEqual(["bounced"]);
+  });
+
+  it("race: a refusal whose write lost to a delivery opens no held alert", async () => {
+    const key = await legalApp();
+    replies.push(async () => {
+      const id = (await env.DB.prepare("SELECT id FROM mails").first<{ id: string }>())!.id;
+      await applyEvent(env.DB, { type: "delivered", ref: id, requestId: "req-d", server: null }, nowIso());
+      return refusedAddress();
+    });
+    const id = await idOf(await sendLegal(key));
+    expect((await mailRow(id)).status).toBe("delivered");
+    expect(await alerts(id)).toEqual([]);
+  });
+
+  it("a delivered copy that later bounces cannot close its alert with itself", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    await event(id, "email_delivered");
+    await event(id, "hardbounce");
+    const [a] = await alerts(id);
+    await expect(closeAlert(env.DB, a.id, "itself", id, nowIso())).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("an event fills a missing acceptance with its time and the vendor's id, and never overwrites one", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    const first = (await copy(id))!;
+    await event(id, "softbounce", { requestId: "req-other" });
+    expect((await copy(id))!).toMatchObject({ sent_at: first.sent_at, vendor_request_id: "req-1" });
+    await env.DB.prepare("UPDATE legal_documents SET sent_at=NULL, vendor_request_id=NULL WHERE mail_id=?").bind(id).run();
+    await env.DB.prepare("DELETE FROM mails WHERE id=?").bind(id).run();
+    await event(id, "feedback_loop", { requestId: "req-1" });
+    const c = (await copy(id))!;
+    expect(c.vendor_request_id).toBe("req-1");
+    expect(c.sent_at).not.toBeNull();
+  });
+
+  it("a stopped Worker's lost stamp and lost alerts are repaired by the 5-minute job, once", async () => {
+    const key = await legalApp();
+    const sent = await idOf(await sendLegal(key));
+    replies.push(refusedAddress);
+    const refused = await idOf(await sendLegal(key));
+    replies.push(down);
+    const gone = await idOf(await sendLegal(key, { expires_at: addMinutes(nowIso(), 10) }));
+    await runOutbox(lenv(), addMinutes(nowIso(), 11));
+    // What a Worker stopped between its two writes leaves: the transport row written, the copy's part not.
+    await env.DB.prepare("UPDATE legal_documents SET sent_at=NULL, vendor_request_id=NULL WHERE mail_id=?").bind(sent).run();
+    await env.DB.prepare("DELETE FROM legal_alerts").run();
+    lines = [];
+    await runOutbox(lenv(), addMinutes(nowIso(), 12));
+    const s = (await copy(sent))!;
+    expect(s.vendor_request_id).toBe("req-1");
+    expect(s.sent_at).toBe((await mailRow(sent)).sent_at);
+    expect((await alerts(refused)).map((a) => a.kind)).toEqual(["held"]);
+    expect((await alerts(gone)).map((a) => a.kind)).toEqual(["given_up"]);
+    expect(lines).toHaveLength(2);
+    await runOutbox(lenv(), addMinutes(nowIso(), 17));
+    expect(await alerts()).toHaveLength(2);
+    expect(lines).toHaveLength(2);
   });
 
   it("untoldFailures skips legal mails", async () => {
@@ -546,6 +609,17 @@ describe("task 6: alerts", () => {
     expect(await tellAlerts(lenv())).toBe(1);
     expect(await tellAlerts(lenv())).toBe(0);
     expect(lines).toHaveLength(1);
+  });
+
+  it("with no Telegram channel nothing is claimed, so the lines go once one is set", async () => {
+    const key = await legalApp();
+    replies.push(refusedAddress);
+    await sendLegal(key, {}, lenv({ NOTIFIER: "none" }));
+    expect(await tellAlerts(lenv({ NOTIFIER: "none" }))).toBe(0);
+    expect(await remindOpenAlerts(lenv({ NOTIFIER: "none" }))).toBe(false);
+    expect((await alerts())[0].told_at).toBeNull();
+    expect(await tellAlerts(lenv())).toBe(1);
+    expect(await remindOpenAlerts(lenv())).toBe(true);
   });
 
   it("parallel tellers send each line once", async () => {
@@ -597,8 +671,9 @@ describe("task 6: alerts", () => {
     await expect(closeAlert(env.DB, alert.id, "resent", fixed, now)).rejects.toMatchObject({ status: 400 }); // not delivered yet
     await expect(closeAlert(env.DB, alert.id, "resent", otherRef, now)).rejects.toMatchObject({ status: 400 }); // another order
     await event(fixed, "email_delivered");
-    await closeAlert(env.DB, alert.id, "resent to the corrected address", fixed, now);
-    expect((await alerts(bad))[0]).toMatchObject({ close_reason: "resent to the corrected address", replaced_by: fixed });
+    await expect(closeAlert(env.DB, alert.id, "itself", bad, now)).rejects.toMatchObject({ status: 400 });
+    await closeAlert(env.DB, alert.id, "resent to the corrected address", fixed, now, "sub-op");
+    expect((await alerts(bad))[0]).toMatchObject({ close_reason: "resent to the corrected address", replaced_by: fixed, closed_by: "sub-op" });
     await expect(closeAlert(env.DB, alert.id, "again", null, now)).rejects.toMatchObject({ status: 404 });
   });
 
@@ -717,14 +792,27 @@ describe("task 8: deletion and keeping", () => {
     const a = await idOf(await sendLegal(key, sub));
     const b = await idOf(await sendLegal(key, sub)); // a renewal
     const c = await idOf(await sendLegal(other, sub));
-    const ended = "2026-10-01T00:00:00.000Z";
+    const ended = nowIso();
     const r = await call("/v1/mail/legal/end", key, { reference: REFERENCE, ended_at: ended });
     expect(await r.json()).toEqual({ updated: 2 });
     expect((await copy(a))!.keep_from).toBe(ended);
     expect((await copy(b))!.keep_from).toBe(ended);
     expect((await copy(c))!.keep_from).toBeNull();
-    expect(await (await call("/v1/mail/legal/end", key, { reference: REFERENCE, ended_at: "2026-10-05T00:00:00Z" })).json()).toEqual({ updated: 0 });
+    expect(await (await call("/v1/mail/legal/end", key, { reference: REFERENCE, ended_at: nowIso() })).json()).toEqual({ updated: 0 });
     expect((await copy(a))!.keep_from).toBe(ended);
+  });
+
+  it("the end call refuses a time before the newest document, and never touches a one-off sale", async () => {
+    const key = await legalApp();
+    const sub = await idOf(await sendLegal(key, { document: { version: VERSION, reference: REFERENCE, sale: "subscription" } }));
+    const oneOff = await idOf(await sendLegal(key));
+    const oneOffStart = (await copy(oneOff))!.keep_from;
+    const early = await call("/v1/mail/legal/end", key, { reference: REFERENCE, ended_at: "2020-01-01T00:00:00Z" });
+    expect(early.status).toBe(400);
+    expect(await early.json()).toMatchObject({ error: "invalid_request", field: "ended_at" });
+    expect((await copy(sub))!.keep_from).toBeNull();
+    expect(await (await call("/v1/mail/legal/end", key, { reference: REFERENCE, ended_at: nowIso() })).json()).toEqual({ updated: 1 });
+    expect((await copy(oneOff))!.keep_from).toBe(oneOffStart);
   });
 
   it("the end call refuses a future time, a bad reference, a browser and a missing key", async () => {
@@ -836,8 +924,11 @@ describe("task 9: the admin panel", () => {
     await event(id, "email_delivered", { details: { mx_host: "mx.example.org" } });
     // A reference that could break a header, planted past validation: it never reaches one.
     await env.DB.prepare("UPDATE legal_documents SET reference=? WHERE mail_id=?").bind('O"77\r\nX-Evil: 1', id).run();
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...a: unknown[]) => void logs.push(a.map(String).join(" ")));
     const res = await get(`/legal/${id}/copy`);
     expect(res.status).toBe(200);
+    expect(logs).toEqual([`legal copy downloaded {"mail_id":"${id}","app":"shop","admin":"sub-1"}`]);
     expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
     expect(res.headers.get("content-disposition")).toBe(`attachment; filename="legal-${id}.txt"`);
     expect(res.headers.get("x-content-type-options")).toBe("nosniff");

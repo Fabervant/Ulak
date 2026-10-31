@@ -6,7 +6,8 @@ evidence, the `held` state, the owner alerts that stay open until closed by hand
 the admin panel, and the copy's own keeping period that outlives a deletion request.
 
 **Started:** the owner, Session 15: "Plan phase 1 now (Recommended)", while phase 0 waits on the vendor account.
-**Built only after phase 0 has shipped** (decision 8: phases in order); this plan is written and stress-tested now.
+**Built ahead, deployed after phase 0:** the owner, Session 16: "Build now, deploy later (Recommended)", while phase
+0 still waits on the vendor account. It is deployed only after phase 0 has shipped (decision 8: phases in order).
 
 **Goes live only after:** phase 0 live; each selling app's own side (its sale handler, its daily reconciliation, its
 subscription-end call, its mailed form read by operations in Turkish and English). Ulak's part is built and tested
@@ -291,3 +292,29 @@ Operations answered reads 3, 6, 11 and the receipt check the same day (see the h
 is 3 years counted from `keep_from` (the sale for a one-off, the subscription's end, reported by the new
 `POST /v1/mail/legal/end`), never from `created_at`; `document.sale` says which; the copy keeps `text_sha256` and the
 delivered event's receiving server; the 24-hour window and the HTML refusal stand; phase 1 does not shrink.
+
+## Changes during the build (Session 16)
+
+Built in `aec3608`, `5f74881`, `fcb3613` and the review fixes after them; not deployed. Choices the plan left open,
+and the independent review's findings (0 high, 3 medium, 8 low), folded in:
+- Each alert kind opens at most once per copy, open or closed: a replayed event never reopens what the operator
+  closed (the plan's "a new problem opens a new row" stands: a different kind is a new row).
+- No `undelivered` alert on a copy with a `held` one: it was never sent and is already the operator's.
+- A hard bounce opens `bounced` whenever it matches a copy, also when the transport row is gone.
+- `text_sha256` is SHA-256 of the subject, a blank line and the text (a subject holds no line break).
+- Any vendor event for a copy fills a missing acceptance with the event's time and the vendor's id, and the 5-minute
+  job repairs what a stopped Worker leaves between two writes: an acceptance the transport row holds but the copy
+  does not, and an alert a closed transport row calls for (review M1).
+- `POST /v1/mail/legal/end` refuses an `ended_at` before the newest copy of that reference: a set start cannot be
+  corrected by a repeat (review M2).
+- `LEGAL_KEEP_DAYS` below 365 is a bad setting, so a typo (109 for 1096) turns the health check red instead of
+  deleting copies within the hour (review M3).
+- An alert records who closed it (`closed_by`), `replaced_by` may not be the alert's own copy, a later event can fill
+  a missing receiving server, and each download is logged with the mail id, app and admin only (review L1, L4, L5).
+- The receiving server is read tolerantly from any event field named for a server, mx or host; pin the exact field
+  from the first real delivered event (phase 0's acceptance).
+- Accepted as they are: a ping lost between its claim and its send (the daily reminder covers it), no per-sender
+  ceiling on legal documents (spec 5.3), the phase-0 replay window, and an admin form error shown as plain text like
+  every other form.
+- Planted defects: 26, each caught by a test except two pairs of guards that back each other up (the repeat check
+  before the unique index; the undelivered and delivered guards in both the select and the statement).

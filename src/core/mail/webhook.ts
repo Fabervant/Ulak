@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "../ids";
 import { hmacBase64, scrubAddresses } from "./hash";
-import { legalIdForEvent, openAlert, stampDelivered } from "./legal";
+import { legalIdForEvent, openAlert, stampDelivered, stampSentFromEvent } from "./legal";
 
 export const WEBHOOK_TOLERANCE_MS = 5 * 60_000;
 
@@ -105,11 +105,12 @@ function parseOne(raw: unknown): MailEvent {
  *  is no error. Returns whether a row changed. */
 export async function applyEvent(db: D1Database, ev: MailEvent, now: string): Promise<boolean> {
   const changed = await applyToMail(db, ev, now);
-  if (ev.type === "delivered") return (await stampDelivered(db, ev.ref, ev.requestId, ev.server, now)) || changed;
-  if (ev.type === "hardbounce") {
-    const legal = await legalIdForEvent(db, ev.ref, ev.requestId);
-    if (legal && (await openAlert(db, legal, "bounced", now))) return true;
-  }
+  if (ev.type === "ignored") return changed;
+  const legal = await legalIdForEvent(db, ev.ref, ev.requestId);
+  if (!legal) return changed;
+  await stampSentFromEvent(db, legal, ev.requestId, now);
+  if (ev.type === "delivered") return (await stampDelivered(db, legal, null, ev.server, now)) || changed;
+  if (ev.type === "hardbounce" && (await openAlert(db, legal, "bounced", now))) return true;
   return changed;
 }
 

@@ -3,7 +3,7 @@ import { getApp } from "../apps";
 import { nowIso } from "../time";
 import { channelFromEnv } from "../notify/notifier";
 import { mailConfig, MailConfigError, type MailConfig } from "./config";
-import { legalConfigState, openUndelivered, recordLegalConfigState, tellAlerts } from "./legal";
+import { legalConfigState, openUndelivered, recordLegalConfigState, repairLegal, tellAlerts } from "./legal";
 import { attemptMail, claimTelling, dueMails, failureLine, giveUpExpired, purgeMailHousekeeping, releaseTelling, untoldFailures } from "./outbox";
 
 /** A run stops taking mails after this long, so two runs five minutes apart never overlap. */
@@ -50,6 +50,7 @@ export interface OutboxRun {
 export async function runOutbox(env: Env, now: string = nowIso(), transport?: typeof fetch): Promise<OutboxRun> {
   const run = await runMail(env, now, transport);
   await recordLegalConfigState(env.DB, legalConfigState(env), now);
+  await repairLegal(env.DB, now);
   const legal_alerts_opened = await openUndelivered(env.DB, now);
   return { ...run, legal_alerts_opened, legal_alerts_told: await tellAlerts(env, now) };
 }
