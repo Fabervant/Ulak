@@ -35,6 +35,9 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
   exactly the two client apps' `<app id>@` addresses; asked whether the owner has registered the domain in Apple's
   Email Sources (needed for the hidden-address acceptance); the token and webhook key by the operator's secret inbox.
   Self-hosting gained the restriction step. Letter archived.
+- **Letter: operations "Apple relay and sender list":** the restriction list goes to the owner's next console
+  steps; the owner registered the sending domain in Apple's Email Sources on 2026-09-27, to be proven for the vendor's
+  mail by phase 0's hidden-address acceptance. No answer needed; archived.
 - **Found:** main already holds phase 1 and migrations 0006-0007, so the phase 0 ship's migrate and deploy carry them;
   recorded in MEMORY with the order to send both clients the phase 1 letter and the sender-block note before the
   phase 0 deploy (agent).
