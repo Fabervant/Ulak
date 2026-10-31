@@ -26,12 +26,13 @@ export interface Env {
   NOTIFIER?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
-  /** Outbound mail: all five or none (src/core/mail/config.ts). */
+  /** Outbound mail: all six or none (src/core/mail/config.ts). */
   MAIL_API_URL?: string;
   MAIL_FROM_DOMAIN?: string;
   MAIL_API_KEY?: string;
   MAIL_WEBHOOK_KEY?: string;
   MAIL_HASH_SECRET?: string;
+  MAIL_SENDER_INFO?: string;
   /** Legal documents: the copy's keeping period in days; unset refuses legal documents (src/core/mail/legal.ts). */
   LEGAL_KEEP_DAYS?: string;
   /** Legal documents: how many hours Ulak keeps trying; 24 when unset. */

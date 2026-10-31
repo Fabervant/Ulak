@@ -7,10 +7,13 @@ export interface MailConfig {
   apiKey: string;
   webhookKey: string;
   hashSecret: string;
+  /** Who sends: the operator's name, address, phone, e-mail and abuse contact. It closes every mail. */
+  senderInfo: string;
 }
 
-/** The five settings mail needs. They are set together or not at all. */
-export const MAIL_SETTINGS = ["MAIL_API_URL", "MAIL_FROM_DOMAIN", "MAIL_API_KEY", "MAIL_WEBHOOK_KEY", "MAIL_HASH_SECRET"] as const;
+/** The six settings mail needs. They are set together or not at all: the vendor's terms require the
+ *  sender's identity in every mail, so no mail goes without `MAIL_SENDER_INFO`. */
+export const MAIL_SETTINGS = ["MAIL_API_URL", "MAIL_FROM_DOMAIN", "MAIL_API_KEY", "MAIL_WEBHOOK_KEY", "MAIL_HASH_SECRET", "MAIL_SENDER_INFO"] as const;
 
 export class MailConfigError extends Error {
   constructor(public missing: string[]) {
@@ -18,13 +21,13 @@ export class MailConfigError extends Error {
   }
 }
 
-/** The mail settings when all five are set, null when none is. Some but not all throws: a half-set
+/** The mail settings when all six are set, null when none is. Some but not all throws: a half-set
  *  configuration must never look like an unconfigured one, and never like success. */
 export function mailConfig(env: Env): MailConfig | null {
   const missing = MAIL_SETTINGS.filter((k) => !env[k]?.trim());
   if (missing.length === MAIL_SETTINGS.length) return null;
   if (missing.length) throw new MailConfigError(missing);
-  return { apiUrl: env.MAIL_API_URL!, fromDomain: env.MAIL_FROM_DOMAIN!.trim().toLowerCase(), apiKey: env.MAIL_API_KEY!, webhookKey: env.MAIL_WEBHOOK_KEY!, hashSecret: env.MAIL_HASH_SECRET! };
+  return { apiUrl: env.MAIL_API_URL!, fromDomain: env.MAIL_FROM_DOMAIN!.trim().toLowerCase(), apiKey: env.MAIL_API_KEY!, webhookKey: env.MAIL_WEBHOOK_KEY!, hashSecret: env.MAIL_HASH_SECRET!, senderInfo: env.MAIL_SENDER_INFO!.trim() };
 }
 
 /** mailConfig for a request: 503 when mail is not set up here, 500 when it is half set. */

@@ -16,7 +16,7 @@ import type { Env } from "../src/core/env";
 import { addMinutes, nowIso } from "../src/core/time";
 import { vendorSigned } from "./helpers";
 
-const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret" };
+const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret", MAIL_SENDER_INFO: "Example Ltd, 1 Main St, Town; +1 555 0100; abuse@example.invalid" };
 const menv = (over: Partial<Env> = {}) => ({ ...env, ...MAIL, ...over }) as Env;
 
 /** The vendor double: records each call and answers with the next scripted reply (default 200). */
@@ -83,11 +83,12 @@ describe("POST /v1/mail", () => {
     expect(r.addr_hash).toBe(await addrHash(MAIL.MAIL_HASH_SECRET, "demo", "person@example.org"));
   });
 
-  it("passes the optional html part through untouched", async () => {
+  it("passes the optional html part through untouched, closed by the sender block in both parts", async () => {
     const key = await mailApp();
     const html = '<p><a href="https://app.example.org/reset?t=secret-token" style="padding:8px">Reset</a></p>';
     expect((await send(key, { html })).status).toBe(202);
-    expect(calls[0]!.body.htmlbody).toBe(html);
+    expect(calls[0]!.body.htmlbody).toBe(`${html}<hr><p style="font-size:12px;color:#666">${MAIL.MAIL_SENDER_INFO}</p>`);
+    expect(calls[0]!.body.textbody).toBe(`${mailBody().text}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`);
   });
 
   it("queues when the vendor is down, keeping the content for the retry", async () => {

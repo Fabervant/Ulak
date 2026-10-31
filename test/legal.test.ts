@@ -32,7 +32,7 @@ import { addMinutes, nowIso } from "../src/core/time";
 import { adminRequest, pinAdmin, submission, vendorSigned } from "./helpers";
 import { insertMessage } from "../src/core/messages";
 
-const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret" };
+const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret", MAIL_SENDER_INFO: "Example Ltd, 1 Main St, Town; +1 555 0100; abuse@example.invalid" };
 const LEGAL = { LEGAL_KEEP_DAYS: "1096" };
 const TG = { NOTIFIER: "telegram", TELEGRAM_BOT_TOKEN: "t", TELEGRAM_CHAT_ID: "c" };
 const lenv = (over: Partial<Env> = {}) => ({ ...env, ...MAIL, ...LEGAL, ...TG, ...over }) as Env;
@@ -293,7 +293,8 @@ describe("task 4: acceptance, the ceiling exemption and repeats", () => {
     const { id, status } = await res.json<{ id: string; status: string }>();
     expect(status).toBe("queued");
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.body).toMatchObject({ subject: SUBJECT, textbody: TEXT, client_reference: id });
+    // The mail carries the document and then the operator's sender block; the copy keeps the document as sent by the app.
+    expect(calls[0]!.body).toMatchObject({ subject: SUBJECT, textbody: `${TEXT.replace(/\s+$/, "")}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`, client_reference: id });
     expect(calls[0]!.body.htmlbody).toBeUndefined();
     const c = (await copy(id))!;
     expect(c).toMatchObject({ app: "shop", reference: REFERENCE, version: VERSION, to_addr: ADDRESS, subject: SUBJECT, text_body: TEXT, vendor_request_id: "req-1", user_ref: "user-0123456789abcdef" });

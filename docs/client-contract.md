@@ -174,7 +174,10 @@ of that person are kept by the seller's legal duty, with the `user_ref` removed 
 If the operator has set up outbound mail and turned it on for your app, your app's server hands its
 finished mails to Ulak, and Ulak sends them from your app's own address (`<app id>@` the operator's
 mail domain). Your app keeps its words and its timing; Ulak owns the transport, the retries and the
-record.
+record. Ulak closes every mail with the operator's sender block (legal name, address, phone, e-mail,
+abuse contact): after a `-- ` line at the end of `text`, and under a rule at the end of `html`
+(before `</body>` when there is one). Do not add your own; a legal document's kept copy holds your
+text as you sent it.
 
 **The send key.** Mail takes its own key, `ulak_send_<app>_<48 hex characters>`, issued on the
 operator's **Apps** page and kept on your server only. Every mail call that carries an `Origin`

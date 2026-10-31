@@ -1,9 +1,10 @@
 // Copy to wrangler.api.jsonc (gitignored) and replace every REPLACE_ME.
 // Secrets, set with `wrangler secret put -c wrangler.api.jsonc <NAME>`:
 //   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, IMAGE_URL_SECRET
-// Outbound mail (optional; all five or none, checked before every deploy): add the vars
-//   "MAIL_API_URL" (the mail vendor's send endpoint for your account's region) and
-//   "MAIL_FROM_DOMAIN" (each app sends from <app id>@ this domain) to "vars", and the secrets
+// Outbound mail (optional; all six or none, checked before every deploy): add the vars
+//   "MAIL_API_URL" (the mail vendor's send endpoint for your account's region),
+//   "MAIL_FROM_DOMAIN" (each app sends from <app id>@ this domain) and "MAIL_SENDER_INFO" (your
+//   name, address, phone, e-mail and abuse contact; it closes every mail) to "vars", and the secrets
 //   MAIL_API_KEY, MAIL_WEBHOOK_KEY, MAIL_HASH_SECRET. See docs/self-hosting.md.
 // Legal documents (optional, needs mail): add the var "LEGAL_KEEP_DAYS" (the copies' keeping period
 //   in days, from your legal advice, e.g. "1096"; unset refuses legal documents) and optionally

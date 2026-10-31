@@ -4,6 +4,7 @@ import { nowIso } from "../time";
 import { channelFromEnv } from "../notify/notifier";
 import { mailConfig, MailConfigError, type MailConfig } from "./config";
 import { legalConfigState, openUndelivered, recordLegalConfigState, repairLegal, tellAlerts } from "./legal";
+import { tellRates } from "./rates";
 import { attemptMail, claimTelling, dueMails, failureLine, giveUpExpired, purgeMailHousekeeping, releaseTelling, untoldFailures } from "./outbox";
 
 /** A run stops taking mails after this long, so two runs five minutes apart never overlap. */
@@ -41,6 +42,8 @@ export interface OutboxRun {
   told: number;
   legal_alerts_opened: number;
   legal_alerts_told: number;
+  /** Lines sent because the bounce or complaint rate passed its alert line (src/core/mail/rates.ts). */
+  rates_told: number;
   skipped?: string;
 }
 
@@ -52,10 +55,11 @@ export async function runOutbox(env: Env, now: string = nowIso(), transport?: ty
   await recordLegalConfigState(env.DB, legalConfigState(env), now);
   await repairLegal(env.DB, now);
   const legal_alerts_opened = await openUndelivered(env.DB, now);
-  return { ...run, legal_alerts_opened, legal_alerts_told: await tellAlerts(env, now) };
+  const legal_alerts_told = await tellAlerts(env, now);
+  return { ...run, legal_alerts_opened, legal_alerts_told, rates_told: await tellRates(env, now) };
 }
 
-async function runMail(env: Env, now: string, transport?: typeof fetch): Promise<Omit<OutboxRun, "legal_alerts_opened" | "legal_alerts_told">> {
+async function runMail(env: Env, now: string, transport?: typeof fetch): Promise<Omit<OutboxRun, "legal_alerts_opened" | "legal_alerts_told" | "rates_told">> {
   const started = Date.now();
   const given_up = (await giveUpExpired(env.DB, now)).length;
   await purgeMailHousekeeping(env.DB, now);

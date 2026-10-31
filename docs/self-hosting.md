@@ -168,17 +168,18 @@ that tells you the notifier is silently failing while you believe nobody wrote.
 
 Ulak can send your apps' transactional mail through a transactional mail service. The code speaks
 one vendor's API: an agent key in the `Authorization` header, one JSON call per mail, and signed
-webhooks for delivery, bounce and spam-complaint reports. Mail needs five settings, **all or none**:
+webhooks for delivery, bounce and spam-complaint reports. Mail needs six settings, **all or none**:
 
 | Name | Where | Value |
 |---|---|---|
 | `MAIL_API_URL` | `vars` in `wrangler.api.jsonc` | the vendor's send endpoint for your account's data centre |
 | `MAIL_FROM_DOMAIN` | `vars` | the domain your apps send from; each app sends as `<app id>@` it |
+| `MAIL_SENDER_INFO` | `vars` | who sends: your legal name, postal address, phone, e-mail and abuse or legal contact, on one or more lines (`\n` in JSON). Ulak closes every mail with it, after a `-- ` line in the text and under a rule in the HTML; the vendor's terms require it |
 | `MAIL_API_KEY` | secret | the agent's send key |
 | `MAIL_WEBHOOK_KEY` | secret | the agent's webhook Authentication Key |
 | `MAIL_HASH_SECRET` | secret | 32 random bytes, for example `openssl rand -hex 32`; keys the per-app address hashes. Never change it once mail has been sent: suppressions and deletion by address match on it |
 
-`npm run deploy:api` refuses to deploy while some but not all five are set. If one goes missing
+`npm run deploy:api` refuses to deploy while some but not all six are set. If one goes missing
 later, the mail calls answer `500 mail_config_half_set` and the result check goes red within five
 minutes; support messages keep working.
 
@@ -195,6 +196,14 @@ In the vendor's console, for the agent Ulak sends with:
    minutes old are refused. The vendor signs the event, not its timestamp, so the window cannot stop a
    replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
+6. Set the account's contact address to the mailbox that answers abuse and legal mail: the vendor
+   forwards complaints there and expects an answer within its deadline, with the vendor in copy.
+
+Use the account for transactional mail only; the vendor's terms forbid marketing through it. The
+vendor may close an account whose bounce rate reaches 5% or whose spam-complaint rate reaches 0.1%.
+The 5-minute job counts the mails the vendor took in the last 30 days and tells you on Telegram,
+once, when either rate reaches half its limit (2.5%, 0.05%), and again only after it has fallen back
+under that line and risen past it again.
 
 Then, per app, on **Apps**: the From name, the *sends transactional mail* tick, the app's labels,
 and *New send key*, which you hand to the app's server once.

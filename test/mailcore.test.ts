@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { mailConfig, MailConfigError, MAIL_SETTINGS } from "../src/core/mail/config";
 import { addrHash, scrubAddresses } from "../src/core/mail/hash";
 import { validateMail, mailMistake } from "../src/core/mail/validate";
-import { classify, vendorBody, sendViaVendor } from "../src/core/mail/vendor";
+import { classify, vendorBody, sendViaVendor, withSenderInfo } from "../src/core/mail/vendor";
 import { signedPayload, verifySignature, parseEvents } from "../src/core/mail/webhook";
 import { backoffMinutes } from "../src/core/mail/outbox";
 import type { Env } from "../src/core/env";
 import type { AppRow } from "../src/core/apps";
 import { vendorSigned } from "./helpers";
 
-const FULL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "k", MAIL_WEBHOOK_KEY: "w", MAIL_HASH_SECRET: "h" };
+const FULL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "k", MAIL_WEBHOOK_KEY: "w", MAIL_HASH_SECRET: "h", MAIL_SENDER_INFO: "Example Ltd" };
 const asEnv = (o: Record<string, string>) => o as unknown as Env;
 
 describe("mail configuration is all or nothing", () => {
@@ -22,6 +22,10 @@ describe("mail configuration is all or nothing", () => {
       expect(() => mailConfig(asEnv(rest))).toThrow(name);
     });
   }
+  it("the sender block is one of the settings: no mail goes without it", () => {
+    expect(MAIL_SETTINGS).toContain("MAIL_SENDER_INFO");
+    expect(mailConfig(asEnv({ ...FULL, MAIL_SENDER_INFO: " Example Ltd \n" }))?.senderInfo).toBe("Example Ltd");
+  });
   it("a blank value counts as missing", () => expect(() => mailConfig(asEnv({ ...FULL, MAIL_API_KEY: "  " }))).toThrow(/MAIL_API_KEY/));
 });
 
@@ -107,6 +111,25 @@ describe("the vendor call", () => {
     expect(b).toMatchObject({ track_clicks: false, track_opens: false, client_reference: "mail-1", reply_to: [{ address: "demo@example.invalid" }], from: { address: "demo@example.invalid", name: "Demo" } });
     expect(b).not.toHaveProperty("htmlbody");
     expect(vendorBody({ ...m, html: "<p>x</p>" }).htmlbody).toBe("<p>x</p>");
+  });
+  it("withSenderInfo closes the text with the separator and the block", () => {
+    expect(withSenderInfo(m, "Example Ltd\n+1 555 0100").text).toBe("T\n\n-- \nExample Ltd\n+1 555 0100");
+    expect(withSenderInfo({ ...m, text: "T\n\n  " }, "X").text).toBe("T\n\n-- \nX");
+    expect(withSenderInfo(m, "X").html).toBeNull();
+  });
+  it("withSenderInfo puts the escaped block before the closing body tag, else at the end", () => {
+    const block = '<hr><p style="font-size:12px;color:#666">A &#38; B &#60;x&#62;<br>line 2</p>';
+    expect(withSenderInfo({ ...m, html: "<html><body><p>x</p></BODY></html>" }, "A & B <x>\nline 2").html).toBe(`<html><body><p>x</p>${block}</BODY></html>`);
+    expect(withSenderInfo({ ...m, html: "<p>x</p>" }, "A & B <x>\nline 2").html).toBe(`<p>x</p>${block}`);
+  });
+  it("every vendor call carries the sender block", async () => {
+    let body: any;
+    const cfg = { apiUrl: "https://mail.example.invalid/v1.1/email", fromDomain: "example.invalid", apiKey: "k", webhookKey: "w", hashSecret: "h", senderInfo: "Example Ltd" };
+    await sendViaVendor(cfg, m, (async (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return new Response("{}", { status: 200 });
+    }) as typeof fetch);
+    expect(body.textbody).toBe("T\n\n-- \nExample Ltd");
   });
   it("200 is accepted with the request id", () => expect(classify(200, '{"request_id":"req-9","message":"OK"}')).toEqual({ kind: "accepted", requestId: "req-9" }));
   it("a refused to-address is address_refused, scrubbed", () => {

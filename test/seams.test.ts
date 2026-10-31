@@ -258,7 +258,7 @@ describe("seam: mail vendor transport", () => {
     expect(vendorTransport.fetch).toBe(defaultFetch);
   });
   it("a vendor call through the default transport comes back as vendor_down, not a throw", async () => {
-    const cfg = { apiUrl: "https://ulak-seam-probe.invalid/v1.1/email", fromDomain: "example.invalid", apiKey: "k", webhookKey: "w", hashSecret: "h" };
+    const cfg = { apiUrl: "https://ulak-seam-probe.invalid/v1.1/email", fromDomain: "example.invalid", apiKey: "k", webhookKey: "w", hashSecret: "h", senderInfo: "Example Ltd" };
     const r = await sendViaVendor(cfg, { id: "m", fromAddress: "a@example.invalid", fromName: "A", to: "p@example.invalid", subject: "s", text: "t", html: null });
     expect(r.kind).toBe("vendor_down");
     expect(JSON.stringify(r)).not.toMatch(/illegal invocation/i);

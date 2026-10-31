@@ -47,6 +47,22 @@ export function vendorBody(m: Outgoing): Record<string, unknown> {
   };
 }
 
+/** The plain-text line that opens the sender block: the conventional signature separator. */
+export const SENDER_SEPARATOR = "-- ";
+
+const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+/** The mail with the operator's sender block at its end, in the text and in the html (escaped, before
+ *  the closing body tag when there is one). The vendor's terms require it in every mail. */
+export function withSenderInfo(m: Outgoing, info: string): Outgoing {
+  const text = `${m.text.replace(/\s+$/, "")}\n\n${SENDER_SEPARATOR}\n${info}`;
+  if (m.html === null) return { ...m, text };
+  const block = `<hr><p style="font-size:12px;color:#666">${info.split(/\r?\n/).map(escapeHtml).join("<br>")}</p>`;
+  const at = m.html.search(/<\/body>(?![\s\S]*<\/body>)/i);
+  const html = at === -1 ? m.html + block : m.html.slice(0, at) + block + m.html.slice(at);
+  return { ...m, text, html };
+}
+
 /** Classifies one answer of the vendor. Exported for its tests. */
 export function classify(status: number, body: string): VendorResult {
   if (status >= 200 && status < 300) {
@@ -80,7 +96,7 @@ export async function sendViaVendor(cfg: MailConfig, m: Outgoing, transport: typ
     const res = await transport(cfg.apiUrl, {
       method: "POST",
       headers: { accept: "application/json", "content-type": "application/json", authorization: `Zoho-enczapikey ${cfg.apiKey}` },
-      body: JSON.stringify(vendorBody(m)),
+      body: JSON.stringify(vendorBody(withSenderInfo(m, cfg.senderInfo))),
       signal: AbortSignal.timeout(timeoutMs),
     });
     return classify(res.status, await res.text());
