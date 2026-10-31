@@ -1,5 +1,31 @@
 # Completed tasks
 
+## Session 16 — 2026-10-31
+
+Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0 still waits on the account.
+
+- **Mailbox:** empty (no letter since S260).
+- **Phase 0 ship:** blocked, re-read at the source 10:04: FabervantOps' memory still lists the CPaaS DKIM and CNAME as
+  "next with him"; public DNS has no CPaaS record (SPF includes only zohomail.eu). Not deployed.
+- **Owner: "Build now, deploy later (Recommended)"** (asked because his order was phase 1 after phase 0 ships, and
+  phase 0 waits on an outside account). Built from the plan: migration 0006 (`legal_documents`, `legal_alerts`,
+  `mails_idem` scoped by kind), `src/core/mail/legal.ts`, the legal path in `src/api/mail.ts` (always `202 queued`,
+  answer before the first attempt), stamps and alerts in outbox/webhook/job, `POST /v1/mail/legal/end`, keeping by
+  `LEGAL_KEEP_DAYS` in the hourly job, every deletion path keeping copies without `user_ref`, admin `/legal` (alerts,
+  close, search, download), the *sends legal documents* tick, health check fields. Commits `aec3608` (code),
+  `5f74881` (docs: client contract, self-hosting, config example), `fcb3613`, `c24a7e1`, `ed1d326`.
+- **Tests:** 487 pass (87 new in `test/legal.test.ts`, plus updated old tests for the new answers). Written after the
+  code, so proven by 26 planted defects: every one caught except two pairs of guards that back each other up.
+- **Independent review** (fresh reviewer): 0 high, 3 medium, 8 low. Fixed: lost acceptance or alert after a stopped
+  Worker repaired by the 5-minute job and filled by any vendor event (M1); `ended_at` before the newest copy refused
+  (M2); `LEGAL_KEEP_DAYS` under 365 a bad setting (M3); `closed_by`, no self `replaced_by`, late receiving server
+  filled, downloads logged by id (L1, L4, L5). Accepted: L3, L6, L7, L8 (reasons in the plan's last section).
+- **Agent choices** (recorded in the plan's "Changes during the build"): each alert kind once per copy, so a replay
+  never reopens a closed alert; no `undelivered` on a held copy; a bounce alerts whenever it matches a copy; the hash
+  covers subject, blank line, text; the 365-day floor (a typo must not delete copies within the hour).
+- **FabervantOps told** (`letters/FabervantOps/2026-10-31-ulak-s16-phase-1-built-not-deployed.md`): built not
+  deployed, its two open answers stay settings, the 365-day floor, no privacy-statement change, phase 2 not near.
+
 ## Session 15 — 2026-10-30
 
 Mailbox cleared, the last two apps' answers folded into the spec, phase 1 planned; phase 0 still waits on the account.
