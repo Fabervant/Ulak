@@ -40,7 +40,9 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
   mail by phase 0's hidden-address acceptance. No answer needed; archived.
 - **Both clients told before the deploy** (the one task that waited on nobody): letters to the first and second
   client, `2026-10-31-ulak-s17-what-changes-at-the-mail-deploy.md`: the deletion answer's new field (asked to confirm
-  unknown fields are ignored), the new mail routes and kind-scoped keys, and the sender block in every mail.
+  unknown fields are ignored), the new mail routes and kind-scoped keys, and the sender block in every mail. The
+  first client answered the same day: its deletion reads only `deleted_messages`, pinned by a new test on its side;
+  it adds no sender block. The second client's answer is open.
 - **Found:** main already holds phase 1 and migrations 0006-0007, so the phase 0 ship's migrate and deploy carry them;
   recorded in MEMORY with the order to send both clients the phase 1 letter and the sender-block note before the
   phase 0 deploy (agent).
