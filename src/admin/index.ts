@@ -14,7 +14,10 @@ import { createSession, sessionCookie, OAUTH_COOKIE, oauthCookie, newPkce, clear
 import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
-import { listApps, createApp, updateApp, rotateKey, rotateNoticeKey, rotateSendKey } from "../core/apps";
+import { listApps, getApp, createApp, updateApp, rotateKey, rotateNoticeKey, rotateSendKey } from "../core/apps";
+import { closeAlert, copyText, countCopiesWithoutEnd, getLegal, listOpenAlerts, recordedLegalConfig, searchCopies } from "../core/mail/legal";
+import { legalView } from "./views/legal";
+import { html } from "hono/html";
 import { listOutbox } from "../core/mail/outbox";
 import { outboxView } from "./views/outbox";
 import { listImagesFor } from "../core/images";
@@ -120,7 +123,11 @@ app.get("/", async (c) => {
   const statuses = statusList(c.env);
   const filter = { app: c.req.query("app") || undefined, status: c.req.query("status") || undefined };
   const [rows, counts, apps] = await Promise.all([listAdmin(c.env.DB, filter), countByAppAndStatus(c.env.DB, statuses[0] ?? "pending"), listApps(c.env.DB)]);
-  return page(c, "Messages", () => listView(rows, counts, apps.map((a) => a.id), filter, statuses));
+  // The line after a person's deletion: what went, and the legal copies kept by the seller's duty.
+  const deleted = c.req.query("deleted");
+  const kept = c.req.query("kept");
+  const done = /^\d{1,9}$/.test(deleted ?? "") && /^\d{1,9}$/.test(kept ?? "") ? html`<p class="warn">Deleted ${deleted} message(s) of that person; kept ${kept} legal cop${kept === "1" ? "y" : "ies"}, without the person's reference, by the seller's legal duty.</p>` : "";
+  return page(c, "Messages", () => html`${done}${listView(rows, counts, apps.map((a) => a.id), filter, statuses)}`);
 });
 
 app.get("/m/:id", async (c) => {
@@ -149,8 +156,8 @@ app.post("/m/:id/delete-user", async (c) => {
   await readForm(c);
   const m = await getMessage(c.env.DB, c.req.param("id"));
   if (!m || !m.user_ref) return c.text("not found or anonymous", 404);
-  await deleteUser(c.env, m.app, m.user_ref);
-  return c.redirect(`/?app=${m.app}`, 303);
+  const r = await deleteUser(c.env, m.app, m.user_ref);
+  return c.redirect(`/?app=${m.app}&deleted=${r.deleted_messages}&kept=${r.kept_legal_copies}`, 303);
 });
 
 // A key or token is shown once. The post that made it redirects, carrying it sealed in a cookie,
@@ -187,7 +194,14 @@ app.post("/apps", async (c) => {
 
 app.post("/apps/:id", async (c) => {
   const f = await readForm(c);
-  await updateApp(c.env.DB, c.req.param("id"), {
+  const id = c.req.param("id");
+  const cur = await getApp(c.env.DB, id); // an unknown app is updateApp's 404
+  const kinds = [...(f.mail_transactional === "on" ? ["transactional"] : []), ...(f.mail_legal === "on" ? ["legal_document"] : [])];
+  // A legal document needs the API Worker's keeping period; the admin Worker reads what the timer recorded of it.
+  if (kinds.includes("legal_document") && !cur?.mail_kinds.includes("legal_document") && (await recordedLegalConfig(c.env.DB)) !== "set") {
+    return c.text("legal documents need LEGAL_KEEP_DAYS set on the API Worker (docs/self-hosting.md); the timer has not found it set", 400);
+  }
+  await updateApp(c.env.DB, id, {
     retention_days: Number(f.retention_days),
     images_enabled: f.images_enabled === "on",
     notify_enabled: f.notify_enabled === "on",
@@ -196,7 +210,7 @@ app.post("/apps/:id", async (c) => {
       .map((s) => s.trim())
       .filter(Boolean),
     mail_from_name: f.mail_from_name ?? "",
-    mail_kinds: f.mail_transactional === "on" ? ["transactional"] : [],
+    mail_kinds: kinds,
     mail_labels: (f.mail_labels ?? "")
       .split(",")
       .map((s) => s.trim())
@@ -215,6 +229,30 @@ app.get("/outbox", async (c) => {
   const filterApp = c.req.query("app") || undefined;
   const [rows, apps] = await Promise.all([listOutbox(c.env.DB, nowIso(), filterApp), listApps(c.env.DB)]);
   return page(c, "Outbox", () => outboxView(rows, apps.map((a) => a.id), filterApp));
+});
+
+app.get("/legal", async (c) => {
+  const reference = (c.req.query("reference") ?? "").trim();
+  const filterApp = c.req.query("app") || undefined;
+  const [alerts, apps, copiesWithoutEnd] = await Promise.all([listOpenAlerts(c.env.DB), listApps(c.env.DB), countCopiesWithoutEnd(c.env.DB, nowIso())]);
+  const search = reference ? { reference, app: filterApp, rows: await searchCopies(c.env.DB, reference, filterApp) } : undefined;
+  return page(c, "Legal", (csrf) => legalView({ alerts, search, apps: apps.map((a) => a.id), copiesWithoutEnd }, csrf));
+});
+
+app.post("/legal/alerts/:id/close", async (c) => {
+  const f = await readForm(c);
+  await closeAlert(c.env.DB, c.req.param("id"), f.reason ?? "", f.replaced_by ?? null, nowIso());
+  return c.redirect("/legal", 303);
+});
+
+// The copy as a plain-text file. The file name carries only Ulak's id, never the app's reference.
+app.get("/legal/:mail_id/copy", async (c) => {
+  const doc = await getLegal(c.env.DB, c.req.param("mail_id"));
+  if (!doc) return c.text("not found", 404);
+  return c.body(copyText(doc), 200, {
+    "content-type": "text/plain; charset=utf-8",
+    "content-disposition": `attachment; filename="legal-${doc.mail_id}.txt"`,
+  });
 });
 
 app.post("/apps/:id/rotate", async (c) => {

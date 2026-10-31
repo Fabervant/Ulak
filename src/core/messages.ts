@@ -178,14 +178,15 @@ export async function setStatus(db: D1Database, id: string, status: string, allo
 }
 
 /** Hard deletion of everything a user_ref owns in one app: images first, objects before rows,
- *  then the messages, whose cascade takes the replies, and the mails sent with that user_ref. */
-export async function deleteUser(env: Env, app: string, user_ref: string): Promise<{ deleted_messages: number }> {
-  await deleteMailsByUser(env.DB, app, user_ref);
+ *  then the messages, whose cascade takes the replies, and the mails sent with that user_ref. Legal
+ *  copies are kept by the seller's legal duty, with the user_ref removed, and counted. */
+export async function deleteUser(env: Env, app: string, user_ref: string): Promise<{ deleted_messages: number; kept_legal_copies: number }> {
+  const { kept_legal_copies } = await deleteMailsByUser(env.DB, app, user_ref);
   await deleteImagesWhere(env, "app=? AND user_ref=?", [app, user_ref]);
   // meta.changes would include cascaded reply rows, so count first.
   const n = (await env.DB.prepare("SELECT COUNT(*) n FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).first<{ n: number }>())?.n ?? 0;
   await env.DB.prepare("DELETE FROM messages WHERE app=? AND user_ref=?").bind(app, user_ref).run();
-  return { deleted_messages: n };
+  return { deleted_messages: n, kept_legal_copies };
 }
 
 /** Deletes the messages past their app's retention, measured from last activity, with their

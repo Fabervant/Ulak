@@ -102,8 +102,7 @@ api.delete("/users", async (c) => {
   const app = c.req.query("app") ?? "";
   const user_ref = c.req.query("user_ref") ?? "";
   if (!app || user_ref.length < 16) throw new ApiError(400, "invalid_request", "app and user_ref are required", false, { field: "user_ref" });
-  const { deleted_messages } = await deleteUser(c.env, app, user_ref);
-  return c.json({ deleted_messages });
+  return c.json(await deleteUser(c.env, app, user_ref));
 });
 
 api.get("/apps", async (c) => c.json({ apps: (await listApps(c.env.DB)).map(({ key_hash: _k, ...a }) => a) }));

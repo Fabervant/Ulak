@@ -16,7 +16,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
           <pre><code>${newKey.key}</code></pre>`
       : ""}
     <table>
-      <tr><th>app</th><th>retention days, images, owner notices, allowed origins; mail: From name, transactional, labels</th><th></th></tr>
+      <tr><th>app</th><th>retention days, images, owner notices, allowed origins; mail: From name, kinds, labels</th><th></th></tr>
       ${apps.map(
         (a) => html`<tr>
           <td>${a.id}</td>
@@ -29,6 +29,7 @@ export function appsView(apps: AppRow[], csrf: string, newKey?: { id: string; ke
               <input name="allowed_origins" value="${a.allowed_origins.join(",")}" placeholder="https://a.example,https://www.a.example" />
               <input name="mail_from_name" value="${a.mail_from_name ?? ""}" placeholder="From name, e.g. My App" />
               <label><input type="checkbox" name="mail_transactional" ${a.mail_kinds.includes("transactional") ? "checked" : ""} class="narrow" /> sends transactional mail</label>
+              <label><input type="checkbox" name="mail_legal" ${a.mail_kinds.includes("legal_document") ? "checked" : ""} class="narrow" /> sends legal documents</label>
               <input name="mail_labels" value="${a.mail_labels.join(",")}" placeholder="mail labels, e.g. confirm_email,password_reset" />
               <button>Save</button>
             </form>

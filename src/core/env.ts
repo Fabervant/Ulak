@@ -32,6 +32,10 @@ export interface Env {
   MAIL_API_KEY?: string;
   MAIL_WEBHOOK_KEY?: string;
   MAIL_HASH_SECRET?: string;
+  /** Legal documents: the copy's keeping period in days; unset refuses legal documents (src/core/mail/legal.ts). */
+  LEGAL_KEEP_DAYS?: string;
+  /** Legal documents: how many hours Ulak keeps trying; 24 when unset. */
+  LEGAL_EXPIRY_HOURS?: string;
 }
 
 export function statusList(env: Env): string[] {

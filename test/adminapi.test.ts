@@ -86,7 +86,7 @@ describe("admin API", () => {
     expect(apps.apps[0]!.key_hash).toBeUndefined();
     expect(Object.keys(apps.apps[0]!).filter((k) => k.includes("hash"))).toEqual([]);
     expect(apps.apps[0]!.has_notice_key).toBe(false);
-    expect(await (await call(`/api/users?app=demo&user_ref=${m.user_ref}`, { method: "DELETE" })).json()).toEqual({ deleted_messages: 1 });
+    expect(await (await call(`/api/users?app=demo&user_ref=${m.user_ref}`, { method: "DELETE" })).json()).toEqual({ deleted_messages: 1, kept_legal_copies: 0 });
   });
   it("checks answer 200 when green and 503 with counts when a planted row breaches", async () => {
     expect((await call("/api/checks")).status).toBe(200);

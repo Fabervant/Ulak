@@ -5,8 +5,8 @@ import type { AppRow } from "../apps";
 export const MAIL_KINDS = ["transactional", "legal_document"] as const;
 export type MailKind = (typeof MAIL_KINDS)[number];
 
-/** Kinds this build can send; `legal_document` comes with phase 1 (its kept copy and alerts). */
-export const SENDABLE_KINDS: readonly MailKind[] = ["transactional"];
+/** Kinds this build can send. */
+export const SENDABLE_KINDS: readonly MailKind[] = ["transactional", "legal_document"];
 
 export const MAIL_MAX_BODY_BYTES = 512 * 1024;
 export const SUBJECT_MAX_CHARS = 500;
@@ -25,6 +25,27 @@ export interface MailRequest {
   expires_at: string;
   idempotency_key: string;
   user_ref: string | null;
+  /** A legal document's own facts; null on every other kind. */
+  document: LegalFacts | null;
+}
+
+export interface LegalFacts {
+  version: string;
+  reference: string;
+  /** `one_off`: the copy's keeping period starts at the sale; `subscription`: when the app reports its end. */
+  sale: "one_off" | "subscription";
+}
+
+export const DOCUMENT_ID = /^[A-Za-z0-9._:/-]{1,64}$/;
+const SALES = ["one_off", "subscription"] as const;
+
+function validateDocument(v: unknown): LegalFacts {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) throw invalid("document", "a legal_document needs document: { version, reference, sale }");
+  const d = v as Record<string, unknown>;
+  if (typeof d.version !== "string" || !DOCUMENT_ID.test(d.version)) throw invalid("document.version", "document.version must match [A-Za-z0-9._:/-]{1,64}");
+  if (typeof d.reference !== "string" || !DOCUMENT_ID.test(d.reference)) throw invalid("document.reference", "document.reference must match [A-Za-z0-9._:/-]{1,64}");
+  if (!(SALES as readonly unknown[]).includes(d.sale)) throw invalid("document.sale", "document.sale must be one_off or subscription");
+  return { version: d.version, reference: d.reference, sale: d.sale as LegalFacts["sale"] };
 }
 
 export const ADDRESS = /^[^\s<>"'(),;:@\\]+@[^\s<>"'(),;:@\\]+\.[^\s<>"'(),;:@\\]+$/;
@@ -38,8 +59,9 @@ const str = (v: unknown, field: string): string => {
   return v;
 };
 
-/** The request's fields, or 400 naming the first bad one. Content rules are `mailMistake`'s. */
-export function validateMail(raw: unknown, now: string): MailRequest {
+/** The request's fields, or 400 naming the first bad one. Content rules are `mailMistake`'s. A legal
+ *  document may expire up to `legalExpiryHours` ahead, every other kind MAX_EXPIRY_HOURS. */
+export function validateMail(raw: unknown, now: string, legalExpiryHours: number = MAX_EXPIRY_HOURS): MailRequest {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw invalid("body", "body must be a JSON object");
   const b = raw as Record<string, unknown>;
   const to = str(b.to, "to").trim();
@@ -63,7 +85,8 @@ export function validateMail(raw: unknown, now: string): MailRequest {
   if (!isIso(exp)) throw invalid("expires_at", "expires_at must be ISO 8601");
   const expires_at = storedIso(exp);
   const ahead = Date.parse(expires_at) - Date.parse(now);
-  if (ahead <= 0 || ahead > MAX_EXPIRY_HOURS * 3_600_000) throw invalid("expires_at", `expires_at must be later than now and at most ${MAX_EXPIRY_HOURS} hours ahead`);
+  const maxHours = kind === "legal_document" ? legalExpiryHours : MAX_EXPIRY_HOURS;
+  if (ahead <= 0 || ahead > maxHours * 3_600_000) throw invalid("expires_at", `expires_at must be later than now and at most ${maxHours} hours ahead`);
   const idempotency_key = str(b.idempotency_key, "idempotency_key");
   if (!IDEM.test(idempotency_key)) throw invalid("idempotency_key", "idempotency_key must be 1 to 128 printable characters");
   let user_ref: string | null = null;
@@ -71,7 +94,10 @@ export function validateMail(raw: unknown, now: string): MailRequest {
     user_ref = str(b.user_ref, "user_ref");
     if (user_ref.length < 16 || user_ref.length > 128) throw invalid("user_ref", "user_ref must be 16 to 128 characters");
   }
-  return { to, locale, kind: kind as MailKind, label, subject, text, html, expires_at, idempotency_key, user_ref };
+  let document: LegalFacts | null = null;
+  if (kind === "legal_document") document = validateDocument(b.document);
+  else if (b.document !== undefined && b.document !== null) throw invalid("document", "document is only for a legal_document");
+  return { to, locale, kind: kind as MailKind, label, subject, text, html, expires_at, idempotency_key, user_ref, document };
 }
 
 const unprocessable = (code: string, detail: string) => new ApiError(422, code, detail, false);
@@ -90,6 +116,7 @@ const httpsOnly = (url: string) => /^https:\/\/[^\s/]+/i.test(url.trim());
 export function mailMistake(app: AppRow, m: MailRequest): ApiError | null {
   if (!SENDABLE_KINDS.includes(m.kind) || !app.mail_kinds.includes(m.kind)) return unprocessable("kind_not_allowed", `this app may not send ${m.kind} mail`);
   if (!app.mail_labels.includes(m.label)) return unprocessable("unknown_label", `label ${m.label} is not on this app's list`);
+  if (m.kind === "legal_document" && m.html !== null) return unprocessable("bad_html", "a legal document is plain text; send no html");
   if (TAG.test(m.text)) return unprocessable("not_plain_text", "text must be plain text; put markup in html");
   for (const u of m.text.match(URL_IN_TEXT) ?? []) if (!httpsOnly(u)) return unprocessable("bad_link", "every link must be an absolute https:// link");
   if (m.html !== null) {

@@ -137,7 +137,7 @@ describe("POST /v1/mail", () => {
 
   it("answers 422 with the reason for the app's own mistakes", async () => {
     const key = await mailApp();
-    for (const [over, code] of [[{ label: "welcome" }, "unknown_label"], [{ text: "<p>x</p>" }, "not_plain_text"], [{ text: "http://x.example.org" }, "bad_link"], [{ html: "<img src='https://t.example.org/p.gif'>" }, "bad_html"], [{ kind: "legal_document" }, "kind_not_allowed"]] as const) {
+    for (const [over, code] of [[{ label: "welcome" }, "unknown_label"], [{ text: "<p>x</p>" }, "not_plain_text"], [{ text: "http://x.example.org" }, "bad_link"], [{ html: "<img src='https://t.example.org/p.gif'>" }, "bad_html"], [{ kind: "legal_document", document: { version: "v1", reference: "o-1", sale: "one_off" } }, "kind_not_allowed"]] as const) {
       const res = await send(key, over);
       expect(res.status).toBe(422);
       expect(await res.json()).toMatchObject({ error: code, retryable: false });
@@ -380,7 +380,7 @@ describe("deletion", () => {
     await send(key, { to: "someone@example.org" });
     await send(other);
     const res = await call("/v1/mail/delete", key, { body: { address: "person@example.org" } });
-    expect(await res.json()).toEqual({ deleted_mails: 2 });
+    expect(await res.json()).toEqual({ deleted_mails: 2, kept_legal_copies: 0 });
     const left = (await env.DB.prepare("SELECT app FROM mails ORDER BY app").all<{ app: string }>()).results.map((r) => r.app);
     expect(left).toEqual(["demo", "other"]);
   });

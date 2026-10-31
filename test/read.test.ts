@@ -146,7 +146,7 @@ describe("DELETE /v1/messages", () => {
       env,
       createExecutionContext(),
     );
-    expect(await res.json()).toEqual({ deleted_messages: 1 });
+    expect(await res.json()).toEqual({ deleted_messages: 1, kept_legal_copies: 0 });
     expect((await env.DB.prepare("SELECT COUNT(*) n FROM messages").first<{ n: number }>())!.n).toBe(1);
     expect((await env.DB.prepare("SELECT COUNT(*) n FROM replies").first<{ n: number }>())!.n).toBe(0);
   });

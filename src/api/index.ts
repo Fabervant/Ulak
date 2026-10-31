@@ -149,8 +149,7 @@ app.get("/v1/messages", requireAppKey(), async (c) => {
 app.delete("/v1/messages", requireAppKey(), async (c) => {
   const tenant = c.get("app");
   const user_ref = userRefParam(c.req.query("user_ref"));
-  const { deleted_messages } = await deleteUser(c.env, tenant.id, user_ref);
-  return c.json({ deleted_messages });
+  return c.json(await deleteUser(c.env, tenant.id, user_ref));
 });
 
 mountMail(app);

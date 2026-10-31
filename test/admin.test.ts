@@ -217,7 +217,7 @@ describe("admin surface", () => {
     const res = await form(`/m/${messageId}/delete-user`, {});
     expect(await getMessage(env.DB, elsewhere)).not.toBeNull();
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe("/?app=demo");
+    expect(res.headers.get("location")).toBe("/?app=demo&deleted=1&kept=0");
     expect(await getMessage(env.DB, messageId)).toBeNull();
     expect(await getImage(env.DB, imageId)).toBeNull();
     expect(await env.IMAGES.get(r2Key)).toBeNull();

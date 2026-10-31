@@ -5,8 +5,11 @@ import { requireSendKey, type AppVars } from "../core/auth/appkey";
 import { nowIso } from "../core/time";
 import { requireMailConfig } from "../core/mail/config";
 import { addrHash } from "../core/mail/hash";
-import { validateMail, mailMistake, MAIL_MAX_BODY_BYTES, ADDRESS } from "../core/mail/validate";
-import { attemptMail, deleteMailsByAddress, findByIdempotencyKey, insertMail, isSuppressed, recipientWaitSec, sendingHealth, type MailStatus } from "../core/mail/outbox";
+import { validateMail, mailMistake, MAIL_MAX_BODY_BYTES, ADDRESS, type MailRequest } from "../core/mail/validate";
+import { attemptMail, deleteMailsByAddress, findByIdempotencyKey, getMail, insertMail, isSuppressed, recipientWaitSec, sendingHealth, type MailStatus } from "../core/mail/outbox";
+import { DEFAULT_LEGAL_EXPIRY_HOURS, findLegal, insertLegal, legalConfigState, reportEnd, requireLegalConfig, tellAlerts } from "../core/mail/legal";
+import type { MailConfig } from "../core/mail/config";
+import type { AppRow } from "../core/apps";
 import { applyEvent, parseEvents, signedPayload, verifySignature } from "../core/mail/webhook";
 import { tellFailures } from "../core/mail/job";
 import { readJsonCapped, readTextCapped } from "./body";
@@ -44,6 +47,30 @@ async function serverApp(c: Context<Ctx>) {
   return c.get("app");
 }
 
+/** A legal document is always answered `202 queued`, on the first call and on every repeat of its
+ *  key however old (spec 5.1, 5.2, 5.4): the app's daily reconciliation depends on a sale never being
+ *  mailed twice, and every problem after acceptance is the operator's, raised as an alert. The answer
+ *  goes before the first attempt, which runs after it; the timer takes the mail if it never runs. */
+async function sendLegal(c: Context<Ctx>, cfg: MailConfig, tenant: AppRow, m: MailRequest, now: string): Promise<Response> {
+  const queued = (id: string) => c.json({ id, status: "queued" }, 202);
+  const prior = await findLegal(c.env.DB, tenant.id, m.idempotency_key);
+  if (prior) return queued(prior.mail_id);
+  const hash = await addrHash(cfg.hashSecret, tenant.id, m.to);
+  const suppressed = await isSuppressed(c.env.DB, tenant.id, hash);
+  const ins = await insertLegal(c.env.DB, tenant.id, m, hash, suppressed, now);
+  if (!ins.created) return queued(ins.id);
+  const env = c.env;
+  const first = async () => {
+    if (!suppressed) {
+      const row = await getMail(env.DB, ins.id);
+      if (row) await attemptMail(env.DB, cfg, row, tenant);
+    }
+    await tellAlerts(env);
+  };
+  c.executionCtx.waitUntil(first().catch((e: unknown) => console.error("legal first attempt", ins.id, e instanceof Error ? e.message : String(e))));
+  return queued(ins.id);
+}
+
 export function mountMail(app: Hono<Ctx>): void {
   app.post("/v1/mail", async (c) => {
     refuseBrowser(c); // 403
@@ -51,11 +78,14 @@ export function mountMail(app: Hono<Ctx>): void {
     const tenant = await serverApp(c); // 401
     const cfg = requireMailConfig(c.env); // 503 / 500
     const now = nowIso();
-    const m = validateMail(raw, now); // 400
+    const legal = legalConfigState(c.env);
+    const m = validateMail(raw, now, legal.state === "set" ? legal.cfg.expiryHours : DEFAULT_LEGAL_EXPIRY_HOURS); // 400
+    if (m.kind === "legal_document") requireLegalConfig(legal); // 422 while unset, 500 when bad
     const mistake = mailMistake(tenant, m);
     if (mistake) throw mistake; // 422, the app's own mistake
+    if (m.kind === "legal_document") return sendLegal(c, cfg, tenant, m, now);
 
-    const prior = await findByIdempotencyKey(c.env.DB, tenant.id, m.idempotency_key, now);
+    const prior = await findByIdempotencyKey(c.env.DB, tenant.id, m.kind, m.idempotency_key, now);
     if (prior) return answer(c, prior.id, prior.status);
 
     const hash = await addrHash(cfg.hashSecret, tenant.id, m.to);
@@ -87,8 +117,15 @@ export function mountMail(app: Hono<Ctx>): void {
     const cfg = requireMailConfig(c.env);
     const address = typeof raw?.address === "string" ? raw.address.trim() : "";
     if (address.length > 254 || !ADDRESS.test(address)) throw invalid("address", "address must be one mail address");
-    const deleted_mails = await deleteMailsByAddress(c.env.DB, tenant.id, await addrHash(cfg.hashSecret, tenant.id, address));
-    return c.json({ deleted_mails });
+    return c.json(await deleteMailsByAddress(c.env.DB, tenant.id, await addrHash(cfg.hashSecret, tenant.id, address)));
+  });
+
+  // The subscription ended: the keeping period of its legal copies starts at `ended_at`.
+  app.post("/v1/mail/legal/end", async (c) => {
+    refuseBrowser(c);
+    const raw = await readJsonCapped(c.req.raw);
+    const tenant = await serverApp(c);
+    return c.json({ updated: await reportEnd(c.env.DB, tenant.id, raw, nowIso()) });
   });
 
   // The vendor's delivery, bounce and complaint reports. No key: the vendor's signature instead.
