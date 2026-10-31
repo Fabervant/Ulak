@@ -11,6 +11,17 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
 - **Owner: "Wait"** (asked whether to plan phase 2 and request its legal reads 7, 9, 10 and the AI-assistant row
   ahead of time): no phase 2 work until phases 0 and 1 are live.
 - **Health check:** `npm test` on main: 22 files, 487 tests passed, exit 0 (no intermittent mail failure).
+- **Letter after the first wrap-up: FabervantOps S264 "Zoho CPaaS terms read"** (the owner is opening the account
+  now). Built into phase 0, commit `829b5b2`, not deployed: `MAIL_SENDER_INFO`, a sixth all-or-none mail setting,
+  closes every mail (text after `-- `, html escaped before `</body>`), because the terms require the sender's name,
+  address, phone, e-mail and abuse contact in every mail and a mail must never go without it; `src/core/mail/rates.ts`
+  tells the operator once on Telegram when the 30-day bounce rate reaches 2.5% or the complaint rate 0.05% (half
+  the terms' 5% and 0.1%), again only after falling back, retrying a line that failed. Deploy check, self-hosting
+  (console step 6: account contact for forwarded complaints), client contract and config example updated.
+  Tests: 502 pass (15 new); 9 planted defects (no block in the call, block not a setting, html unescaped, strict
+  thresholds, retelling, failed line kept, window ignored, job skipping) all caught. Answered by letter
+  `letters/FabervantOps/2026-10-31-ulak-s17-cpaas-terms-built.md` with the proposed block from its company record
+  and three questions (block value, block in the legal copy, Telegram enough); the letter archived.
 
 ## Session 16 — 2026-10-31
 
