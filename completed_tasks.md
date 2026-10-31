@@ -1,5 +1,17 @@
 # Completed tasks
 
+## Session 17 — 2026-10-31
+
+Everything still waits on the CPaaS account; the owner chose to wait on phase 2 too.
+
+- **Mailbox:** empty (the newest archived letter is FabervantOps S264, already recorded in S16).
+- **Phase 0 ship:** blocked, re-read at the source 10:53: FabervantOps S264 (10:49 today) says the account is not
+  opened; public DNS still has only the mailbox SPF (`include:zohomail.eu`) and no CPaaS record. Not deployed.
+- **Phase 1 deploy:** waits on phase 0. **O1 notice:** the first client has not written.
+- **Owner: "Wait"** (asked whether to plan phase 2 and request its legal reads 7, 9, 10 and the AI-assistant row
+  ahead of time): no phase 2 work until phases 0 and 1 are live.
+- **Health check:** `npm test` on main: 22 files, 487 tests passed, exit 0 (no intermittent mail failure).
+
 ## Session 16 — 2026-10-31
 
 Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0 still waits on the account.
