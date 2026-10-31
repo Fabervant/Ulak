@@ -26,6 +26,8 @@ Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0
   covers subject, blank line, text; the 365-day floor (a typo must not delete copies within the hour).
 - **FabervantOps told** (`letters/FabervantOps/2026-10-31-ulak-s16-phase-1-built-not-deployed.md`): built not
   deployed, its two open answers stay settings, the 365-day floor, no privacy-statement change, phase 2 not near.
+  Its S264 answer (archived): account still not opened (on the owner's list), `LEGAL_KEEP_DAYS` 1096 right until
+  TTK art 82 is answered, Fabervant is the seller until Paddle answers, the 365-day floor and no privacy change agreed.
 
 ## Session 15 — 2026-10-30
 
