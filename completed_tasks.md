@@ -15,7 +15,8 @@ Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0
   close, search, download), the *sends legal documents* tick, health check fields. Commits `aec3608` (code),
   `5f74881` (docs: client contract, self-hosting, config example), `fcb3613`, `c24a7e1`, `ed1d326`.
 - **Tests:** 487 pass (87 new in `test/legal.test.ts`, plus updated old tests for the new answers). Written after the
-  code, so proven by 26 planted defects: every one caught except two pairs of guards that back each other up.
+  code, so proven by 26 planted defects: 23 caught; 3 survive, each a guard another guard backs up (the repeat
+  check before the unique index, the undelivered select guard, the delivered stamp's COALESCE).
 - **Independent review** (fresh reviewer): 0 high, 3 medium, 8 low. Fixed: lost acceptance or alert after a stopped
   Worker repaired by the 5-minute job and filled by any vendor event (M1); `ended_at` before the newest copy refused
   (M2); `LEGAL_KEEP_DAYS` under 365 a bad setting (M3); `closed_by`, no self `replaced_by`, late receiving server

@@ -316,5 +316,6 @@ and the independent review's findings (0 high, 3 medium, 8 low), folded in:
 - Accepted as they are: a ping lost between its claim and its send (the daily reminder covers it), no per-sender
   ceiling on legal documents (spec 5.3), the phase-0 replay window, and an admin form error shown as plain text like
   every other form.
-- Planted defects: 26, each caught by a test except two pairs of guards that back each other up (the repeat check
-  before the unique index; the undelivered and delivered guards in both the select and the statement).
+- Planted defects: 26; 23 caught by a test. Three survive, each a guard another guard backs up: the repeat check
+  before the unique index, the undelivered opener's delivery guard in its select (the insert repeats it), and the
+  delivered stamp's COALESCE (its WHERE repeats it). Removing both guards of a pair is caught.
