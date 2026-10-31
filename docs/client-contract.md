@@ -177,7 +177,7 @@ mail domain). Your app keeps its words and its timing; Ulak owns the transport, 
 record. Ulak closes every mail with the operator's sender block (legal name, address, phone, e-mail,
 abuse contact): after a `-- ` line at the end of `text`, and under a rule at the end of `html`
 (before `</body>` when there is one). Do not add your own; a legal document's kept copy holds your
-text as you sent it.
+text as you sent it and, beside it, the sender block that went under it.
 
 **The send key.** Mail takes its own key, `ulak_send_<app>_<48 hex characters>`, issued on the
 operator's **Apps** page and kept on your server only. Every mail call that carries an `Origin`

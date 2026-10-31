@@ -5,6 +5,7 @@ import { addMinutes, isIso, nowIso, storedIso } from "../time";
 import { D1_MAX_PARAMS, placeholders } from "../sql";
 import { channelFromEnv } from "../notify/notifier";
 import type { MailRequest } from "./validate";
+import { SENDER_SEPARATOR } from "./vendor";
 
 // ---------------------------------------------------------------------------------------------
 // Settings. The legal reads change these numbers, never the code.
@@ -101,6 +102,8 @@ export interface LegalDocument {
   vendor_request_id: string | null;
   delivered_at: string | null;
   delivered_server: string | null;
+  /** The sender block that closed the mailed document (migration 0007); null before the first attempt. */
+  sender_info: string | null;
 }
 
 /** The bytes whose SHA-256 proves a copy unchanged: the subject, a blank line, the text, as sent. */
@@ -176,6 +179,12 @@ export async function insertLegal(
     return { id: prior.mail_id, created: false };
   }
   return { id, created: true };
+}
+
+/** The sender block this attempt puts under the document. Rewritten at each attempt until the vendor
+ *  accepts the mail, so the copy holds the block of the mail that went out. */
+export async function recordSenderInfo(db: D1Database, mailId: string, info: string): Promise<void> {
+  await db.prepare("UPDATE legal_documents SET sender_info=? WHERE mail_id=? AND sent_at IS NULL").bind(info, mailId).run();
 }
 
 /** The vendor accepted the mail: stamped once, so a replay or a late writer changes nothing. */
@@ -441,8 +450,10 @@ export async function countCopiesWithoutEnd(db: D1Database, now: string): Promis
   return (await db.prepare("SELECT COUNT(*) n FROM legal_documents WHERE keep_from IS NULL AND created_at<?").bind(addMinutes(now, -NO_END_DAYS * 24 * 60)).first<{ n: number }>())?.n ?? 0;
 }
 
-/** The download: the copy's evidence, then the text exactly as sent. */
+/** The download: the copy's evidence, then the text exactly as sent, closed by the sender block that
+ *  went under it, as the mail showed it. */
 export function copyText(d: LegalDocument): string {
+  const block = d.sender_info === null ? [] : [SENDER_SEPARATOR, d.sender_info];
   return [
     `Recipient: ${d.to_addr}`,
     `Subject: ${d.subject}`,
@@ -452,8 +463,9 @@ export function copyText(d: LegalDocument): string {
     `Accepted by the mail service: ${d.sent_at ?? "not yet"}${d.vendor_request_id ? ` (request ${d.vendor_request_id})` : ""}`,
     `Delivered: ${d.delivered_at ?? "no delivered event yet"}${d.delivered_server ? ` (receiving server ${d.delivered_server})` : ""}`,
     `SHA-256 of the subject, a blank line and the text: ${d.text_sha256}`,
+    `Sender block under the document: ${d.sender_info === null ? "none recorded" : "as below"}`,
     "",
-    d.text_body,
+    ...(block.length ? [d.text_body, "", ...block] : [d.text_body]),
   ].join("\n");
 }
 

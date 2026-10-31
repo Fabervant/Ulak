@@ -5,7 +5,7 @@ import type { AppRow } from "../apps";
 import type { MailConfig } from "./config";
 import type { MailRequest } from "./validate";
 import { sendViaVendor, type VendorResult } from "./vendor";
-import { openAlert, stampSent } from "./legal";
+import { openAlert, recordSenderInfo, stampSent } from "./legal";
 
 /** queued -> sent -> delivered | bounced | complained; queued -> given_up | refused | failed. */
 export type MailStatus = "queued" | "sent" | "delivered" | "bounced" | "complained" | "given_up" | "refused" | "failed";
@@ -138,6 +138,7 @@ async function recordLegalAttempt(db: D1Database, id: string, result: VendorResu
 export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow, app: AppRow, transport?: typeof fetch): Promise<AttemptOutcome> {
   const lease = await claimMail(db, row.id, nowIso());
   if (!lease) return { status: row.status, result: "not_claimed" };
+  if (row.kind === "legal_document") await recordSenderInfo(db, row.id, cfg.senderInfo);
   const result = await sendViaVendor(cfg, {
     id: row.id,
     fromAddress: `${app.id}@${cfg.fromDomain}`,

@@ -114,7 +114,7 @@ describe("the vendor call", () => {
   });
   it("withSenderInfo closes the text with the separator and the block", () => {
     expect(withSenderInfo(m, "Example Ltd\n+1 555 0100").text).toBe("T\n\n-- \nExample Ltd\n+1 555 0100");
-    expect(withSenderInfo({ ...m, text: "T\n\n  " }, "X").text).toBe("T\n\n-- \nX");
+    expect(withSenderInfo({ ...m, text: "T\n" }, "X").text).toBe("T\n\n\n-- \nX");
     expect(withSenderInfo(m, "X").html).toBeNull();
   });
   it("withSenderInfo puts the escaped block before the closing body tag, else at the end", () => {

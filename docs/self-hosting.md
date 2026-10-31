@@ -223,7 +223,7 @@ app to that address answer `422 suppressed`, until the records go by deletion or
 An app that sells can hand Ulak the after-sale documents the buyer must receive (`kind:
 legal_document`, see the client contract). Ulak keeps an exact copy of each with its delivery
 evidence (the acceptance time, the vendor's id, the delivered event's time and receiving server, a
-SHA-256 of the text) for a keeping period you set, also after a deletion request. Two settings, both
+SHA-256 of the text, and the sender block that went under it) for a keeping period you set, also after a deletion request. Two settings, both
 `vars` in `wrangler.api.jsonc`:
 
 | Name | Value |

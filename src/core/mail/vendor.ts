@@ -55,7 +55,8 @@ const escapeHtml = (s: string): string => s.replace(/[&<>"']/g, (c) => `&#${c.ch
 /** The mail with the operator's sender block at its end, in the text and in the html (escaped, before
  *  the closing body tag when there is one). The vendor's terms require it in every mail. */
 export function withSenderInfo(m: Outgoing, info: string): Outgoing {
-  const text = `${m.text.replace(/\s+$/, "")}\n\n${SENDER_SEPARATOR}\n${info}`;
+  // The app's text is kept byte for byte, so a legal copy's download is exactly the mailed text.
+  const text = `${m.text}\n\n${SENDER_SEPARATOR}\n${info}`;
   if (m.html === null) return { ...m, text };
   const block = `<hr><p style="font-size:12px;color:#666">${info.split(/\r?\n/).map(escapeHtml).join("<br>")}</p>`;
   const at = m.html.search(/<\/body>(?![\s\S]*<\/body>)/i);

@@ -14,6 +14,7 @@ import {
   insertLegal,
   legalConfig,
   openUndelivered,
+  recordSenderInfo,
   remindOpenAlerts,
   stampSent,
   tellAlerts,
@@ -294,13 +295,28 @@ describe("task 4: acceptance, the ceiling exemption and repeats", () => {
     expect(status).toBe("queued");
     expect(calls).toHaveLength(1);
     // The mail carries the document and then the operator's sender block; the copy keeps the document as sent by the app.
-    expect(calls[0]!.body).toMatchObject({ subject: SUBJECT, textbody: `${TEXT.replace(/\s+$/, "")}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`, client_reference: id });
+    expect(calls[0]!.body).toMatchObject({ subject: SUBJECT, textbody: `${TEXT}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`, client_reference: id });
     expect(calls[0]!.body.htmlbody).toBeUndefined();
     const c = (await copy(id))!;
     expect(c).toMatchObject({ app: "shop", reference: REFERENCE, version: VERSION, to_addr: ADDRESS, subject: SUBJECT, text_body: TEXT, vendor_request_id: "req-1", user_ref: "user-0123456789abcdef" });
     expect(c.sent_at).not.toBeNull();
+    expect(c.sender_info).toBe(MAIL.MAIL_SENDER_INFO); // the block that went under the document
     expect(c.keep_from).toBe(c.created_at); // a one-off sale's period starts at the sale
     expect(await mailRow(id)).toMatchObject({ kind: "legal_document", status: "sent", to_addr: null, subject: null, text_body: null });
+  });
+
+  it("the copy keeps the sender block of the attempt the mail service accepted, never a later one", async () => {
+    const key = await legalApp();
+    replies.push(() => new Response("bad gateway", { status: 502 }));
+    const id = await idOf(await sendLegal(key));
+    expect((await copy(id))!).toMatchObject({ sent_at: null, sender_info: MAIL.MAIL_SENDER_INFO });
+    const changed = lenv({ MAIL_SENDER_INFO: "New Ltd, 2 High St" });
+    await runOutbox(changed, addMinutes(nowIso(), 6));
+    expect(calls[1]!.body.textbody).toBe(`${TEXT}\n\n-- \nNew Ltd, 2 High St`);
+    expect((await copy(id))!.sender_info).toBe("New Ltd, 2 High St");
+    // A late writer (a duplicate attempt after a lost answer) never changes the block once accepted.
+    await recordSenderInfo(env.DB, id, "Third Ltd");
+    expect((await copy(id))!.sender_info).toBe("New Ltd, 2 High St");
   });
 
   it("a subscription's copy has no keeping start until the app reports the end", async () => {
@@ -939,9 +955,13 @@ describe("task 9: the admin panel", () => {
     expect(text).toContain("receiving server mx.example.org");
     expect(text).toContain("request req-1");
     const [, subjectLine] = text.match(/^Subject: (.*)$/m)!;
+    expect(text).toContain("Sender block under the document: as below");
+    // The body is the mailed text: the document, then the sender block that went under it.
     const body = text.slice(text.indexOf("\n\n") + 2);
-    expect(body).toBe(TEXT);
-    expect(await sha256Hex(hashedText(subjectLine!, body))).toBe((await copy(id))!.text_sha256);
+    expect(body).toBe(`${TEXT}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`);
+    expect(body).toBe(calls[0]!.body.textbody);
+    const doc = body.slice(0, body.lastIndexOf("\n\n-- \n"));
+    expect(await sha256Hex(hashedText(subjectLine!, doc))).toBe((await copy(id))!.text_sha256);
     expect((await get("/legal/nope/copy")).status).toBe(404);
   });
 
