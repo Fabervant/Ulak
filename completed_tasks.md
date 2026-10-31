@@ -22,6 +22,16 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
   thresholds, retelling, failed line kept, window ignored, job skipping) all caught. Answered by letter
   `letters/FabervantOps/2026-10-31-ulak-s17-cpaas-terms-built.md` with the proposed block from its company record
   and three questions (block value, block in the legal copy, Telegram enough); the letter archived.
+- **Letter: FabervantOps S264 "sender block answers":** the block gains the postal code 34846; one ops@ address is
+  fine; Telegram plus a letter from the Ulak session is the alarm route; and each legal copy must keep which sender
+  block went under it (the seller proves what the buyer received). Built, commit `3845436`, not deployed: migration
+  0007 adds `legal_documents.sender_info` (the block's full text, not a hash and version: short, no lookup), written
+  at each attempt until the vendor accepts the mail and never after; the copy download ends with it as mailed; the
+  app's text is now kept byte for byte in the mail (no trailing-space trim), so the download body equals the mailed
+  text. 504 tests pass; 4 planted defects all caught. Answered (`letters/FabervantOps/2026-10-31-ulak-s17-sender-block-in-copy-built.md`), letter archived.
+- **Found:** main already holds phase 1 and migrations 0006-0007, so the phase 0 ship's migrate and deploy carry them;
+  recorded in MEMORY with the order to send both clients the phase 1 letter and the sender-block note before the
+  phase 0 deploy (agent).
 
 ## Session 16 — 2026-10-31
 
