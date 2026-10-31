@@ -5,6 +5,9 @@
 //   "MAIL_API_URL" (the mail vendor's send endpoint for your account's region) and
 //   "MAIL_FROM_DOMAIN" (each app sends from <app id>@ this domain) to "vars", and the secrets
 //   MAIL_API_KEY, MAIL_WEBHOOK_KEY, MAIL_HASH_SECRET. See docs/self-hosting.md.
+// Legal documents (optional, needs mail): add the var "LEGAL_KEEP_DAYS" (the copies' keeping period
+//   in days, from your legal advice, e.g. "1096"; unset refuses legal documents) and optionally
+//   "LEGAL_EXPIRY_HOURS" (1 to 72, default 24). See docs/self-hosting.md.
 // The second cron runs the mail outbox every 5 minutes; the first is the hourly job.
 {
   "name": "ulak-api",

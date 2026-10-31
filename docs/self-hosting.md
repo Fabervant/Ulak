@@ -209,6 +209,33 @@ the result and the vendor's id. The address and the content are deleted the mome
 accepts the mail or Ulak gives it up. A hard bounce or a spam complaint makes later mail from that
 app to that address answer `422 suppressed`, until the records go by deletion or retention.
 
+### Legal documents (optional)
+
+An app that sells can hand Ulak the after-sale documents the buyer must receive (`kind:
+legal_document`, see the client contract). Ulak keeps an exact copy of each with its delivery
+evidence (the acceptance time, the vendor's id, the delivered event's time and receiving server, a
+SHA-256 of the text) for a keeping period you set, also after a deletion request. Two settings, both
+`vars` in `wrangler.api.jsonc`:
+
+| Name | Value |
+|---|---|
+| `LEGAL_KEEP_DAYS` | the keeping period in days, counted from the sale (one-off) or the subscription's end; for example `1096` for three years. Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period |
+| `LEGAL_EXPIRY_HOURS` | optional: how long Ulak keeps trying to send one, 1 to 72; 24 when unset |
+
+A value outside its range makes legal calls answer `500 legal_config_bad` and turns the result check
+red within five minutes. The period is applied at each hourly run, so changing it changes every
+copy's period at once; a copy whose subscription end was never reported is never deleted.
+
+Then, per app, on **Apps**: the *sends legal documents* tick (refused until the five-minute timer has
+seen `LEGAL_KEEP_DAYS` set) and the app's label for the documents.
+
+**Legal** in the admin panel lists the open alerts first, each with a form to close it with a reason
+(and, when the app sent a corrected copy that was delivered, that copy's mail id); then a search by
+order reference and the download of a copy as a text file. An alert opens when an address is refused
+or bounces, when the vendor calls the mail malformed, when Ulak gives it up at `expires_at`, and when
+an hour passes with no delivered event; each is told once on Telegram, and while any is open one
+reminder line goes out a day. Neither a page nor a line shows an address, a subject or a body.
+
 ## What happens when Telegram is down
 
 The message is stored and the app gets `201` regardless. The row records the failure. The hourly

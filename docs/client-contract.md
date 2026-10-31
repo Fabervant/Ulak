@@ -166,7 +166,8 @@ DELETE /v1/messages?user_ref=<ref>
 ```
 
 Hard-deletes every message, reply and image that `user_ref` sent to your app. Call it from your
-account-deletion flow. Returns `{"deleted_messages": n}`.
+account-deletion flow. Returns `{"deleted_messages": n, "kept_legal_copies": k}`: `k` legal documents
+of that person are kept by the seller's legal duty, with the `user_ref` removed (see Legal documents).
 
 ## Sending mail
 
@@ -180,14 +181,16 @@ operator's **Apps** page and kept on your server only. Every mail call that carr
 header is refused (`403 server_only`) before the key is read, so a send key never works from a web
 page, and the app key in your pages can never send mail.
 
-The operator also records, for your app: the From name, that it sends `transactional` mail, and the
-list of your mail labels (one per kind of mail, for example `confirm_email`, `password_reset`).
+The operator also records, for your app: the From name, which kinds it sends (`transactional`,
+`legal_document`), and the list of your mail labels (one per kind of mail, for example
+`confirm_email`, `password_reset`, `order_documents`).
 
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/v1/mail` | send one mail |
 | `GET` | `/v1/mail/status` | whether Ulak can send right now |
 | `POST` | `/v1/mail/delete` | delete every record of mail to one address |
+| `POST` | `/v1/mail/legal/end` | a subscription ended: its legal documents' keeping period starts |
 
 ### `POST /v1/mail`
 
@@ -210,13 +213,13 @@ list of your mail labels (one per kind of mail, for example `confirm_email`, `pa
 |---|---|
 | `to` | one address |
 | `locale` | the language the text is in, for example `en`, `tr`, `pt-BR`; recorded, never used to choose words |
-| `kind` | `transactional`; `legal_document` is refused until Ulak supports it |
+| `kind` | `transactional`, or `legal_document` (see Legal documents below) |
 | `label` | your name for this mail; must be on your app's list |
 | `subject` | one line, at most 500 characters |
 | `text` | your finished plain text, at most 100,000 characters; every link absolute `https://` |
 | `html` | optional: the same mail as HTML, at most 200,000 characters. Links absolute `https://`; no scripts, forms, images, frames or anything that loads from elsewhere (styles are fine). A guard against mistakes, not a sanitiser: Ulak sends it as given |
 | `expires_at` | required, later than now and at most 24 hours ahead. After it, Ulak gives the mail up instead of sending it late. A sign-in link mail: the link's own lifetime or less |
-| `idempotency_key` | required, 1 to 128 printable characters; one per action of the person or event of your app. The same key within 7 days returns the first result and sends nothing |
+| `idempotency_key` | required, 1 to 128 printable characters; one per action of the person or event of your app. The same key within 7 days returns the first result and sends nothing. Keys are scoped by `kind`: one sale's id can key both its legal document and its receipt |
 | `user_ref` | optional, as elsewhere; only used to delete the person's records with your account deletion |
 
 The whole request is at most 512 KiB.
@@ -252,6 +255,79 @@ answer as the mail it names has now: `sent`, `queued`, `422 suppressed`, `410 ma
 - Send no `Reply-To`: Ulak sets it to your app's own address.
 - Your throttles and quiet hours stay in your app; Ulak only adds the per-address ceiling above.
 
+### Legal documents
+
+For the after-sale documents a buyer must receive on a durable medium (the pre-information form,
+the contract, the withdrawal notice), filled with the order's facts. Your app sends the filled text
+exactly as the buyer accepted it; Ulak keeps no templates and fills, computes or changes nothing.
+Ulak keeps an exact copy with its delivery evidence for the keeping period the operator sets, also
+after a deletion request, and raises every problem with it to the operator.
+
+The call is `POST /v1/mail` with `"kind": "legal_document"` and one more field:
+
+```json
+{
+  "to": "buyer@example.org",
+  "locale": "tr",
+  "kind": "legal_document",
+  "label": "order_documents",
+  "subject": "Your order ORD-77: contract and pre-information form",
+  "text": "...the filled documents, as accepted...",
+  "expires_at": "2026-11-01T10:00:00Z",
+  "idempotency_key": "<the sale's id from the payment provider>",
+  "user_ref": "0123456789abcdef0123456789abcdef",
+  "document": { "version": "tos-2026-10", "reference": "ORD-77", "sale": "subscription" }
+}
+```
+
+| Field | Rule |
+|---|---|
+| `document.version` | the document version the buyer accepted; `[A-Za-z0-9._:/-]`, 1 to 64 characters |
+| `document.reference` | your order number, which the operator searches by; the same characters |
+| `document.sale` | `one_off` (the keeping period starts at the sale) or `subscription` (it starts when you report the subscription's end) |
+| `text` | plain text only: `html` is refused (`422 bad_html`) |
+| `expires_at` | at most 24 hours ahead unless the operator set another window (at most 72) |
+| `idempotency_key` | the sale's id. For a legal document it never expires while the copy is kept: a repeat a year later still sends nothing |
+
+No per-address ceiling applies to legal documents, and they do not count toward the transactional one.
+The operator ticks *sends legal documents* for your app; until then, and while the operator has not
+set the keeping period, the call answers `422 kind_not_allowed`.
+
+**The answer is always `202 {"id":"...","status":"queued"}`**, on the first call and on every repeat
+of its key: also for a suppressed address, and also when a send later fails. From that `202` on, the
+duty is Ulak's record: every problem after it (a refused or bounced address, no delivery within an
+hour, a mail given up at `expires_at`) opens an alert for the operator, who settles it by hand. The
+answer comes before the mail is sent, so it is fast; any other answer (`400`, `401`, `403`, `422`,
+`500`, `503`, a timeout) means Ulak did not take the duty.
+
+**Your app's side** (the same for every selling app):
+
+- Call inside your handling of the sale event, once you have the figures and the accepted version.
+  Cap your wait below the sale sender's own webhook timeout (for a sender that wants an answer in 5
+  seconds, about 4). If Ulak has not answered `202` in that time, answer the sale event with an
+  error so the sender delivers it again; the `idempotency_key` keeps it to one mail. Do not mark the
+  sale processed before Ulak's `202`.
+- Inside the sale handler make only this call; send the receipt, the welcome and any other mail after
+  answering the sale event.
+- **Daily reconciliation:** once a day, read the completed sales for a look-back of the sender's
+  re-delivery window plus a day, never less than two days, and call `POST /v1/mail` again for each
+  with the same key. An accepted one sends nothing; one your records show was never accepted is sent,
+  and you ping the owner that it was missed. A sale with no linked acceptance is never called; list it
+  in the owner ping as an alert. If the job has not completed a run in 36 hours, ping the owner.
+- **The subscription's end:** call `POST /v1/mail/legal/end` when a subscription ends (and report the
+  ends your daily reconciliation finds, so a missed call is made up the next day).
+
+### `POST /v1/mail/legal/end`
+
+```json
+{"reference": "ORD-77", "ended_at": "2026-12-01T00:00:00Z"}
+```
+
+With the send key, from your server. Sets the keeping period's start of every legal document of
+your app with that reference that has none yet, so a subscription's renewals share its end; a repeat
+changes nothing. `ended_at` is ISO 8601 and not in the future. Answers `{"updated": n}`. A copy whose
+end is never reported is kept, never deleted early; the operator sees such copies after 400 days.
+
 ### `GET /v1/mail/status`
 
 `{"sending":"ok"}` or `{"sending":"down"}`. `down` means Ulak's last three calls to the mail service
@@ -264,7 +340,9 @@ if at all, the same way for every address, cap the wait at 2 seconds, and treat 
 {"address": "person@example.org"}
 ```
 
-Deletes every record of mail your app sent to that address and answers `{"deleted_mails": n}`. The
+Deletes every record of mail your app sent to that address and answers `{"deleted_mails": n,
+"kept_legal_copies": k}`: legal documents are kept by the seller's legal duty, with the `user_ref`
+removed, and a legal document still waiting to be sent is still sent. The
 address travels in the body, never in the URL, so it reaches no request log. Ulak stores an address
 only as a keyed hash that differs per app, so one app's request never touches another app's
 records. `DELETE /v1/messages?user_ref=` also deletes the mail records sent with that `user_ref`.
