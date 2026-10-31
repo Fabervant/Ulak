@@ -196,7 +196,10 @@ In the vendor's console, for the agent Ulak sends with:
    minutes old are refused. The vendor signs the event, not its timestamp, so the window cannot stop a
    replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
-6. Set the account's contact address to the mailbox that answers abuse and legal mail: the vendor
+6. If you turn on the vendor's sender-address restriction, list exactly the `<app id>@` addresses of
+   the apps that send mail, and add an app's address there before you tick *sends transactional mail*
+   for it; otherwise its mails are refused.
+7. Set the account's contact address to the mailbox that answers abuse and legal mail: the vendor
    forwards complaints there and expects an answer within its deadline, with the vendor in copy.
 
 Use the account for transactional mail only; the vendor's terms forbid marketing through it. The
