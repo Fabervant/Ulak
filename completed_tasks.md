@@ -29,6 +29,10 @@ through the owner's inbox. The second client answered the deploy letter, so both
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
   search of `src/`, `package.json` and the privacy statement found no such reports.
+- **The owner's question on the vendor's mail of 2026-10-31:** the record that nothing can be sent before the account review
+  was wrong. The mail gives a free credit and a daily limit until then, so the review holds volume and buying credits, not the
+  deploy or the live checks. Recommended to the owner: deploy inside the limit with client apps off for mail; not deployed, his word
+  awaited. Ulak made the webhook key (kept in `.secrets\`, never printed) and gave him the console steps one by one.
 
 ## Earlier months
 
