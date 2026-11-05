@@ -26,6 +26,9 @@ through the owner's inbox. The second client answered the deploy letter, so both
 - **Webhook address check:** the console's Verify needs a 200, and its help does not say how it asks. A GET and an empty unsigned
   POST now get one and change nothing; any other unsigned request is still refused. The real request is to be read at Verify.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
+- **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
+  owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
+  search of `src/`, `package.json` and the privacy statement found no such reports.
 
 ## Earlier months
 
