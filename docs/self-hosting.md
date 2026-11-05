@@ -188,19 +188,23 @@ In the vendor's console, for the agent Ulak sends with:
 1. Verify the sending domain (its SPF and DKIM records) and set DMARC for it.
 2. Turn **open tracking and click tracking off**. Ulak sends `track_opens: false` and
    `track_clicks: false` on every mail as well.
-3. Turn **auto-suppression** on for hard bounces, for this agent, and **content storage off**, so the
+3. Turn **auto-suppression** on for hard bounces, for this agent (the console's *Suppression list*
+   section), and leave **Save content for all Agents** unticked (*Settings, Content retention*), so the
    vendor's 60-day delivery log holds no mail text (the privacy statement says it does not).
-4. Add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
-   and feedback loop (spam complaints); open and click off. Set the agent's **Authentication Key**
-   and put the same value in `MAIL_WEBHOOK_KEY`. Requests without a valid signature less than five
-   minutes old are refused. The vendor signs the event, not its timestamp, so the window cannot stop a
-   replay of a captured event; every event is safe to apply twice.
+4. Before you deploy, type a long random value as the agent's **Authentication Key** (*Agents*, the
+   agent, *Webhooks*, *Authentication Key*) and put the same value in `MAIL_WEBHOOK_KEY`.
+   After you deploy, add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard
+   bounce, delivered and feedback loop (spam complaints); open and click off. The console's *Verify*
+   button needs a `200`: a `GET` or an empty unsigned `POST` gets one and changes nothing. Any other
+   request without a valid signature less than five minutes old is refused. The vendor signs the event, not its timestamp, so
+   the window cannot stop a replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
 6. If you turn on the vendor's sender-address restriction, list exactly the `<app id>@` addresses of
    the apps that send mail, and add an app's address there before you tick *sends transactional mail*
    for it; otherwise its mails are refused.
-7. Set the account's contact address to the mailbox that answers abuse and legal mail: the vendor
-   forwards complaints there and expects an answer within its deadline, with the vendor in copy.
+7. Make sure the account's user address reaches the mailbox that answers abuse and legal mail: the
+   console has no separate contact field, so the vendor forwards complaints to that user and expects an
+   answer within its deadline, with the vendor in copy.
 
 Use the account for transactional mail only; the vendor's terms forbid marketing through it. The
 vendor may close an account whose bounce rate reaches 5% or whose spam-complaint rate reaches 0.1%.

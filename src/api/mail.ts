@@ -131,9 +131,13 @@ export function mountMail(app: Hono<Ctx>): void {
   // The vendor's delivery, bounce and complaint reports. No key: the vendor's signature instead.
   // The vendor signs the payload only, not the header's timestamp, so the five-minute window limits
   // stale deliveries but cannot stop a replay of a captured event; every event is safe to apply twice.
+  // The vendor's console asks for a 200 before it adds a webhook, and its help does not say how it
+  // asks. A GET and an empty unsigned POST carry no event, so answering them changes nothing.
+  app.get("/v1/mail/events", (c) => c.json({ applied: 0 }));
   app.post("/v1/mail/events", async (c) => {
     const cfg = requireMailConfig(c.env);
     const body = await readTextCapped(c.req.raw, MAIL_MAX_BODY_BYTES); // 413 before buffering more
+    if (!body && !c.req.header("producer-signature")) return c.json({ applied: 0 });
     const payload = signedPayload(body, c.req.header("content-type") ?? "");
     if (payload === null || !(await verifySignature(c.req.header("producer-signature") ?? null, payload, cfg.webhookKey, Date.now()))) {
       throw new ApiError(401, "bad_signature", "missing or invalid signature", false);

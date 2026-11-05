@@ -37,6 +37,7 @@ app.onError((err) => {
   console.error("unhandled", err);
   return new ApiError(500, "internal", "internal error", true).toResponse();
 });
+app.notFound(() => new ApiError(404, "not_found", "no such route").toResponse());
 
 app.use("*", cors());
 

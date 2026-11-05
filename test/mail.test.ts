@@ -94,11 +94,12 @@ describe("POST /v1/mail", () => {
   it("queues when the vendor is down, keeping the content for the retry", async () => {
     const key = await mailApp();
     replies.push(down);
+    const started = Date.now();
     const { id, status } = await (await send(key)).json<{ id: string; status: string }>();
     expect(status).toBe("queued");
     const r = await row(id);
     expect(r).toMatchObject({ status: "queued", attempts: 1, to_addr: "person@example.org" });
-    expect(Date.parse(r.next_attempt_at) - Date.now()).toBeGreaterThan(4 * 60_000);
+    expect(Date.parse(r.next_attempt_at)).toBeGreaterThanOrEqual(started + 5 * 60_000);
   });
 
   it("the same idempotency key returns the first result and sends nothing again", async () => {
@@ -341,6 +342,35 @@ describe("the vendor's events", () => {
     expect((await row(id)).status).toBe("complained");
     expect((await send(key)).status).toBe(422);
   });
+
+  it("the console's address check gets its 200 and changes nothing; an unsigned event is still refused", async () => {
+    const key = await mailApp();
+    const { id } = await (await send(key)).json<{ id: string }>();
+    const before = await row(id);
+    const ask = async (init: RequestInit) => {
+      const ctx = createExecutionContext();
+      const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", init), menv(), ctx);
+      await waitOnExecutionContext(ctx);
+      return res;
+    };
+    for (const init of [{ method: "GET" }, { method: "HEAD" }, { method: "POST" }]) expect((await ask(init)).status).toBe(200);
+    const refused = await ask({ method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "data=%7B%7D" });
+    expect(refused.status).toBe(401);
+    expect(await row(id)).toEqual(before);
+  });
+
+  for (const [object, status] of [["hardbounce", "bounced"], ["fbl_complaint", "complained"]] as const) {
+    it(`a late delivered event never lifts the suppression a ${object} made`, async () => {
+      const key = await mailApp();
+      const { id } = await (await send(key)).json<{ id: string }>();
+      await event(id, object);
+      expect(await (await event(id, "email_delivered")).json()).toEqual({ applied: 0 });
+      expect(await row(id)).toMatchObject({ status, delivered_at: null });
+      const again = await send(key);
+      expect(again.status).toBe(422);
+      expect(await again.json()).toMatchObject({ error: "suppressed" });
+    });
+  }
 
   it("a soft bounce is noted without suppressing", async () => {
     const key = await mailApp();

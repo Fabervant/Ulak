@@ -11,7 +11,8 @@ routing, `jose` for OpenID Connect, Vitest with the Cloudflare Workers plugin fo
 ## Conventions
 - `npm test` runs `vitest run --reporter verbose`; never a quiet reporter.
 - Every error response is `{ error, retryable, detail }`.
-- `received_at` is the only sort key; `last_activity_at` is the only retention clock.
+- `received_at` is the sort key of every list except a user's poll, which follows `last_activity_at`
+  (`docs/spec.md`); `last_activity_at` is the only retention clock.
 - Message content is rendered as text, never as markup.
 - Deployment values live in gitignored `wrangler.*.jsonc` and Wrangler secrets; commit only the
   `.example` files with `REPLACE_ME` placeholders.

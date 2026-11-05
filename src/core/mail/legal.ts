@@ -10,7 +10,7 @@ import { SENDER_SEPARATOR } from "./vendor";
 // ---------------------------------------------------------------------------------------------
 // Settings. The legal reads change these numbers, never the code.
 
-export interface LegalConfig {
+interface LegalConfig {
   /** The copy's keeping period in days, counted from its `keep_from`. */
   keepDays: number;
   /** How long Ulak keeps trying to send a legal document. */
@@ -20,10 +20,10 @@ export interface LegalConfig {
 export const DEFAULT_LEGAL_EXPIRY_HOURS = 24;
 /** No legal keeping duty is shorter than a year; a smaller value is a typo (109 for 1096) that would
  *  delete copies within the hour, so it is a bad setting, not a period. */
-export const MIN_LEGAL_KEEP_DAYS = 365;
-export const MAX_LEGAL_EXPIRY_HOURS = 72;
+const MIN_LEGAL_KEEP_DAYS = 365;
+const MAX_LEGAL_EXPIRY_HOURS = 72;
 
-export class LegalConfigError extends Error {}
+class LegalConfigError extends Error {}
 
 const wholeNumber = (v: string): number | null => (/^\d{1,6}$/.test(v.trim()) ? Number(v.trim()) : null);
 
@@ -44,7 +44,7 @@ export function legalConfig(env: Env): LegalConfig | null {
   return { keepDays, expiryHours };
 }
 
-export type LegalConfigState = { state: "set"; cfg: LegalConfig } | { state: "unset" } | { state: "bad"; message: string };
+type LegalConfigState = { state: "set"; cfg: LegalConfig } | { state: "unset" } | { state: "bad"; message: string };
 
 export function legalConfigState(env: Env): LegalConfigState {
   try {
@@ -123,7 +123,7 @@ const NEW_ALERT = `INSERT INTO legal_alerts (id,mail_id,app,kind,opened_at)
   WHERE d.mail_id=?2 AND NOT EXISTS (SELECT 1 FROM legal_alerts x WHERE x.mail_id=?2 AND x.kind=?3)
   ON CONFLICT DO NOTHING`;
 
-export type AlertKind = "held" | "given_up" | "failed" | "bounced" | "undelivered";
+type AlertKind = "held" | "given_up" | "failed" | "bounced" | "undelivered";
 
 /** Opens an alert of this kind on the copy, unless the copy ever had one: each problem is raised
  *  once per copy, so a replayed event never reopens what the operator closed. Nothing happens when
@@ -260,7 +260,7 @@ export async function legalIdForEvent(db: D1Database, ref: string | null, reques
 
 /** How long after acceptance a copy with no delivered event opens an alert. Counted from
  *  `created_at`, so a mail stuck in the outbox is caught too. */
-export const UNDELIVERED_AFTER_MINUTES = 60;
+const UNDELIVERED_AFTER_MINUTES = 60;
 export const ALERT_BATCH = 50;
 
 /** Opens `undelivered` on every copy an hour old with no delivered event, no `undelivered` alert
@@ -292,7 +292,7 @@ export async function openUndelivered(db: D1Database, now: string): Promise<numb
   return opened;
 }
 
-export interface AlertRow {
+interface AlertRow {
   id: string;
   mail_id: string;
   app: string;
@@ -307,7 +307,7 @@ export interface AlertRow {
 
 /** The operator's line when an alert opens: the app, the kind and where to look. Never a reference,
  *  an address, a subject or a version. */
-export const alertLine = (a: Pick<AlertRow, "app" | "kind">): string => `[${a.app}] legal document ${a.kind}: open in the admin panel`;
+const alertLine = (a: Pick<AlertRow, "app" | "kind">): string => `[${a.app}] legal document ${a.kind}: open in the admin panel`;
 
 const legalLink = (env: Env) => `${env.ADMIN_URL.replace(/\/$/, "")}/legal`;
 
@@ -334,12 +334,12 @@ export async function tellAlerts(env: Env, now: string = nowIso()): Promise<numb
 }
 
 /** Open alerts per app, for the daily reminder and the health check. */
-export async function openAlertCounts(db: D1Database): Promise<Array<{ app: string; n: number }>> {
+async function openAlertCounts(db: D1Database): Promise<Array<{ app: string; n: number }>> {
   return (await db.prepare("SELECT app, COUNT(*) n FROM legal_alerts WHERE closed_at IS NULL GROUP BY app ORDER BY app").all<{ app: string; n: number }>()).results;
 }
 
 /** The reminder's line: the number of open alerts per app, nothing else. */
-export const reminderLine = (counts: Array<{ app: string; n: number }>): string => `[legal] open alerts: ${counts.map((c) => `${c.app} ${c.n}`).join(", ")}`;
+const reminderLine = (counts: Array<{ app: string; n: number }>): string => `[legal] open alerts: ${counts.map((c) => `${c.app} ${c.n}`).join(", ")}`;
 
 /** While any alert is open, one line a day (owner, Session 15). The day is claimed in `service_state`
  *  by a conditional write before sending and given back if the send fails, so two runs on one day
@@ -368,7 +368,7 @@ export async function remindOpenAlerts(env: Env, now: string = nowIso()): Promis
   }
 }
 
-export const CLOSE_REASON_MAX = 500;
+const CLOSE_REASON_MAX = 500;
 
 /** Closes an open alert by hand with the operator's reason. `replacedBy`, when given, must be a
  *  delivered copy of the same app and reference: the app's corrected call is the remedy the spec
@@ -444,7 +444,7 @@ export async function searchCopies(db: D1Database, reference: string, app?: stri
 }
 
 /** How long a copy may wait for its subscription's end before the operator is shown it to ask the app. */
-export const NO_END_DAYS = 400;
+const NO_END_DAYS = 400;
 
 export async function countCopiesWithoutEnd(db: D1Database, now: string): Promise<number> {
   return (await db.prepare("SELECT COUNT(*) n FROM legal_documents WHERE keep_from IS NULL AND created_at<?").bind(addMinutes(now, -NO_END_DAYS * 24 * 60)).first<{ n: number }>())?.n ?? 0;

@@ -8,11 +8,13 @@ import { ApiError } from "../src/core/errors";
 
 describe("session", () => {
   it("round-trips and rejects tampering and expiry", async () => {
+    const before = Math.floor(Date.now() / 1000);
     const s = await createSession("secret", "sub-1", { ttlSec: 60 });
     const got = await readSession("secret", s);
     expect(got?.sub).toBe("sub-1");
     expect(got?.csrf).toHaveLength(32);
-    expect(Math.abs(got!.iat - Date.now() / 1000)).toBeLessThan(5);
+    expect(got!.iat).toBeGreaterThanOrEqual(before);
+    expect(got!.iat).toBeLessThanOrEqual(Math.ceil(Date.now() / 1000));
     expect(await readSession("other", s)).toBeNull();
     expect(await readSession("secret", s.slice(0, -2) + "zz")).toBeNull();
     expect(await readSession("secret", await createSession("secret", "sub-1", { ttlSec: -1 }))).toBeNull();

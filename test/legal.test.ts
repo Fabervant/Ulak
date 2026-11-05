@@ -16,8 +16,10 @@ import {
   openUndelivered,
   recordSenderInfo,
   remindOpenAlerts,
+  stampDelivered,
   stampSent,
   tellAlerts,
+  ALERT_BATCH,
   SEARCH_LIMIT,
   type LegalDocument,
 } from "../src/core/mail/legal";
@@ -481,6 +483,15 @@ describe("task 5: stamps and alerts on every transition", () => {
     expect((await alerts(id))[0].closed_at).not.toBeNull();
   });
 
+  it("a later delivered event adds the receiving server and never moves the delivered time", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    const first = addMinutes(nowIso(), 1);
+    await stampDelivered(env.DB, id, null, null, first);
+    await stampDelivered(env.DB, id, null, "mx.example.org", addMinutes(nowIso(), 2));
+    expect(await copy(id)).toMatchObject({ delivered_at: first, delivered_server: "mx.example.org" });
+  });
+
   it("a hard bounce opens bounced once; a replay after closing does not reopen it", async () => {
     const key = await legalApp();
     const id = await idOf(await sendLegal(key));
@@ -614,6 +625,20 @@ describe("task 6: alerts", () => {
     expect((await alerts(plain)).map((a) => a.kind)).toEqual(["undelivered"]);
     expect(await alerts(delivered)).toEqual([]);
     expect((await alerts(held)).map((a) => a.kind)).toEqual(["held"]);
+  });
+
+  it("old held copies never crowd a newer undelivered copy out of its alert", async () => {
+    const key = await legalApp();
+    const old = "2020-01-01T00:00:00.000Z";
+    await env.DB.batch(
+      Array.from({ length: ALERT_BATCH + 1 }, (_, i) => [
+        env.DB.prepare("INSERT INTO legal_documents (mail_id,app,reference,version,idempotency_key,label,locale,to_addr,subject,text_body,text_sha256,addr_hash,created_at) VALUES (?1,'shop','R','v',?1,'l','en','a@example.org','s','t','h','h',?2)").bind(`held-${i}`, old),
+        env.DB.prepare("INSERT INTO legal_alerts (id,mail_id,app,kind,opened_at) VALUES (?1,?2,'shop','held',?3)").bind(`alert-${i}`, `held-${i}`, old),
+      ]).flat(),
+    );
+    const undelivered = await idOf(await sendLegal(key));
+    expect(await openUndelivered(env.DB, addMinutes(nowIso(), 61))).toBe(1);
+    expect((await alerts(undelivered)).map((a) => a.kind)).toEqual(["undelivered"]);
   });
 
   it("a line that fails to send is given back and sent at the next run", async () => {

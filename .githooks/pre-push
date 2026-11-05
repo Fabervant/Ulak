@@ -2,3 +2,5 @@
 # Refuse to push if gitleaks finds a secret anywhere in history.
 GL=$(command -v gitleaks || echo "C:/fabervant/_tools/gitleaks/gitleaks.exe")
 "$GL" git --redact --no-banner . || { echo "pre-push: gitleaks found a secret; push refused"; exit 1; }
+# Refuse to push if a test this change can affect fails; CI confirms, it should not discover.
+npm run test:impact || { echo "pre-push: a test failed; push refused"; exit 1; }

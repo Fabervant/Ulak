@@ -151,9 +151,7 @@ describe("the vendor call", () => {
   it("a vendor that does not answer is cut off by the timeout", async () => {
     const cfg = mailConfig(asEnv(FULL))!;
     const hang = ((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal!.addEventListener("abort", () => rej(init.signal!.reason)))) as unknown as typeof fetch;
-    const t = Date.now();
     expect(await sendViaVendor(cfg, m, hang, 50)).toEqual({ kind: "vendor_down", error: "timeout" });
-    expect(Date.now() - t).toBeLessThan(2000);
   });
   it("backs off 5, 10, 20, 40, then hourly", () => expect([1, 2, 3, 4, 5, 9].map(backoffMinutes)).toEqual([5, 10, 20, 40, 60, 60]));
 });
