@@ -31,6 +31,10 @@ through the owner's inbox. The second client answered the deploy letter, so both
   `retryable` on its send and upload paths, which the new shape fits, and nothing changes on its side.
 - **Verify, read from the live log:** the console's check is an unsigned JSON POST, not an empty one, and the route refused it. Now an unsigned POST
   that is not form-encoded gets a 200 and nothing in it is applied; an unsigned form-encoded one or a bad signature is still 401. Test red first, deployed.
+- **Live acceptance, part 1:** webhook added, key set, the console's test hard bounce arrived signed and answered 200. One real mail through the second client's
+  app (owner: "yes, you may"), its send key given for the run and taken back: answered 202, received; raw source: DKIM pass with `d=` the company domain, SPF
+  pass, DMARC pass, From and Reply-To right, no image, link unchanged, sender block in both parts. Its delivered event set the mail to delivered. Status `ok`.
+  A legal document answered `422 kind_not_allowed`. Still open: a hidden Apple address and a suppressed address's send answer.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
