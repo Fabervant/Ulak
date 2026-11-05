@@ -27,7 +27,8 @@ through the owner's inbox. The second client answered the deploy letter, so both
   POST now get one and change nothing; any other unsigned request is still refused. The real request is to be read at Verify.
 - **Deployed, owner: "yeah, deploy":** the API, admin and image Workers, migrations 0005-0007 and the six mail settings. Read back: empty POST to
   the events route 200, unsigned body 401, unknown routes in the error shape, a client poll 200, the result check ok. Legal documents stay refused and
-  client apps have no mail. Live acceptance not yet run: it needs the webhook.
+  client apps have no mail. Live acceptance not yet run: it needs the webhook. The first client answered: it reads a refusal's `error` and
+  `retryable` on its send and upload paths, which the new shape fits, and nothing changes on its side.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
