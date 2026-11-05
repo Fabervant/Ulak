@@ -2,9 +2,9 @@
 
 ## Session 19 — 2026-10-31
 
-Still no ship: every kickoff item waits on Zoho's validation of the CPaaS account (about 2026-11-05), a client or the owner.
+Still no ship: every kickoff item waits on the vendor's validation of its account (about 2026-11-05), a client or the owner.
 
-- **Mailbox:** empty (read at 23:04). TEGlyx's S17 deploy letter is still unarchived in its folder: its answer on
+- **Mailbox:** empty (read at 23:04). The second client's S17 deploy letter is still unarchived in its folder: its answer on
   point 1 is still owed. Agent inbox: empty (no Send Mail token, no webhook key).
 - **Phase 0 ship, phase 1 deploy, O1 notice, phase 2 heads-up:** blocked as in S18, each re-read at its source.
 - **Task that waited on nobody: the hygiene script crash (skipped_issues, S11).** `scripts/hygiene-manifest.mjs`
@@ -17,13 +17,13 @@ Still no ship: every kickoff item waits on Zoho's validation of the CPaaS accoun
 
 ## Session 18 — 2026-10-31
 
-Nothing could ship: phase 0 waits on Zoho's validation of the CPaaS account (owner: "we're waiting for validation
-from Zoho for cpaas. It can take more than 1 day").
+Nothing could ship: phase 0 waits on the vendor's validation of its account (owner: "we're waiting for validation
+from [the vendor] for [its mail product]. It can take more than 1 day").
 
-- **Mailbox:** empty. TEGlyx has not yet read the S17 letter on the mail deploy (still unarchived in its folder), so
+- **Mailbox:** empty. The second client has not yet read the S17 letter on the mail deploy (still unarchived in its folder), so
   its answer on point 1 is still owed.
-- **Phase 0 ship:** blocked. Agent inbox empty (no Send Mail token, no webhook key). FabervantOps' memory: the
-  validation form was submitted in its S263, Zoho answers by about 2026-11-05; the console steps stay with the owner.
+- **Phase 0 ship:** blocked. Agent inbox empty (no Send Mail token, no webhook key). The operations project's memory: the
+  validation form was submitted in its S263, the vendor answers by about 2026-11-05; the console steps stay with the owner.
 - **Wrangler remote access works again** (the S17 `7403` is gone): `wrangler d1 migrations list ulak --remote` lists
   0005, 0006 and 0007 as pending; the API's last deployment is 2026-10-24, so the live state is still `0e18799`.
 - **Phase 1 deploy, O1 notice, phase 2 heads-up:** wait on phase 0, the first client, and phases 0-1 being live.
@@ -31,16 +31,16 @@ from Zoho for cpaas. It can take more than 1 day").
 
 ## Session 17 — 2026-10-31
 
-Everything still waits on the CPaaS account; the owner chose to wait on phase 2 too.
+Everything still waits on the vendor account; the owner chose to wait on phase 2 too.
 
-- **Mailbox:** empty (the newest archived letter is FabervantOps S264, already recorded in S16).
-- **Phase 0 ship:** blocked, re-read at the source 10:53: FabervantOps S264 (10:49 today) says the account is not
-  opened; public DNS still has only the mailbox SPF (`include:zohomail.eu`) and no CPaaS record. Not deployed.
-- **Phase 1 deploy:** waits on phase 0. **O1 notice:** the first client has not written.
+- **Mailbox:** empty (the newest archived letter is the operations project S264, already recorded in S16).
+- **Phase 0 ship:** blocked, re-read at the source 10:53: The operations project S264 (10:49 today) says the account is not
+  opened; public DNS still has only the mailbox SPF (the mailbox provider's include) and no vendor record. Not deployed.
+- **Phase 1 deploy:** waits on phase 0. **O1 notice:** The first client has not written.
 - **Owner: "Wait"** (asked whether to plan phase 2 and request its legal reads 7, 9, 10 and the AI-assistant row
   ahead of time): no phase 2 work until phases 0 and 1 are live.
 - **Health check:** `npm test` on main: 22 files, 487 tests passed, exit 0 (no intermittent mail failure).
-- **Letter after the first wrap-up: FabervantOps S264 "Zoho CPaaS terms read"** (the owner is opening the account
+- **Letter after the first wrap-up: The operations project S264 "the mail vendor terms read"** (the owner is opening the account
   now). Built into phase 0, commit `829b5b2`, not deployed: `MAIL_SENDER_INFO`, a sixth all-or-none mail setting,
   closes every mail (text after `-- `, html escaped before `</body>`), because the terms require the sender's name,
   address, phone, e-mail and abuse contact in every mail and a mail must never go without it; `src/core/mail/rates.ts`
@@ -49,18 +49,18 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
   (console step 6: account contact for forwarded complaints), client contract and config example updated.
   Tests: 502 pass (15 new); 9 planted defects (no block in the call, block not a setting, html unescaped, strict
   thresholds, retelling, failed line kept, window ignored, job skipping) all caught. Answered by letter
-  `letters/FabervantOps/2026-10-31-ulak-s17-cpaas-terms-built.md` with the proposed block from its company record
+  the letter to the operations project with the proposed block from its company record
   and three questions (block value, block in the legal copy, Telegram enough); the letter archived.
-- **Letter: FabervantOps S264 "sender block answers":** the block gains the postal code 34846; one ops@ address is
+- **Letter: The operations project S264 "sender block answers":** the block gains the postal code 34846; one ops@ address is
   fine; Telegram plus a letter from the Ulak session is the alarm route; and each legal copy must keep which sender
   block went under it (the seller proves what the buyer received). Built, commit `3845436`, not deployed: migration
   0007 adds `legal_documents.sender_info` (the block's full text, not a hash and version: short, no lookup), written
   at each attempt until the vendor accepts the mail and never after; the copy download ends with it as mailed; the
   app's text is now kept byte for byte in the mail (no trailing-space trim), so the download body equals the mailed
-  text. 504 tests pass; 4 planted defects all caught. Answered (`letters/FabervantOps/2026-10-31-ulak-s17-sender-block-in-copy-built.md`), letter archived.
-- **Letter: operations "CPaaS domain verified":** the owner opened the vendor account in its EU data centre; the
+  text. 504 tests pass; 4 planted defects all caught. Answered (the letter to the operations project), letter archived.
+- **Letter: operations "vendor domain verified":** the owner opened the vendor account in its EU data centre; the
   sending domain is verified (DKIM and the bounce CNAME), both records read back by Ulak through public resolvers
-  and DNS-over-HTTPS (details in the gitignored memory). Answered: the vendor's sender-address restriction on with
+  and DNS-over-HTTPS (details in the gitignored memory). Answered: The vendor's sender-address restriction on with
   exactly the two client apps' `<app id>@` addresses; asked whether the owner has registered the domain in Apple's
   Email Sources (needed for the hidden-address acceptance); the token and webhook key by the operator's secret inbox.
   Self-hosting gained the restriction step. Letter archived.
@@ -81,8 +81,8 @@ Everything still waits on the CPaaS account; the owner chose to wait on phase 2 
 Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0 still waits on the account.
 
 - **Mailbox:** empty (no letter since S260).
-- **Phase 0 ship:** blocked, re-read at the source 10:04: FabervantOps' memory still lists the CPaaS DKIM and CNAME as
-  "next with him"; public DNS has no CPaaS record (SPF includes only zohomail.eu). Not deployed.
+- **Phase 0 ship:** blocked, re-read at the source 10:04: The operations project's memory still lists the vendor DKIM and CNAME as
+  "next with him"; public DNS has no vendor record (SPF includes only the mailbox provider). Not deployed.
 - **Owner: "Build now, deploy later (Recommended)"** (asked because his order was phase 1 after phase 0 ships, and
   phase 0 waits on an outside account). Built from the plan: migration 0006 (`legal_documents`, `legal_alerts`,
   `mails_idem` scoped by kind), `src/core/mail/legal.ts`, the legal path in `src/api/mail.ts` (always `202 queued`,
@@ -100,7 +100,7 @@ Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0
 - **Agent choices** (recorded in the plan's "Changes during the build"): each alert kind once per copy, so a replay
   never reopens a closed alert; no `undelivered` on a held copy; a bounce alerts whenever it matches a copy; the hash
   covers subject, blank line, text; the 365-day floor (a typo must not delete copies within the hour).
-- **FabervantOps told** (`letters/FabervantOps/2026-10-31-ulak-s16-phase-1-built-not-deployed.md`): built not
+- **the operations project told** (the letter to the operations project): built not
   deployed, its two open answers stay settings, the 365-day floor, no privacy-statement change, phase 2 not near.
   Its S264 answer (archived): account still not opened (on the owner's list), `LEGAL_KEEP_DAYS` 1096 right until
   TTK art 82 is answered, Fabervant is the seller until Paddle answers, the 365-day floor and no privacy change agreed.
@@ -109,24 +109,24 @@ Phase 1 (legal documents) built ahead of deployment on the owner's word; phase 0
 
 Mailbox cleared, the last two apps' answers folded into the spec, phase 1 planned; phase 0 still waits on the account.
 
-- **Mailbox.** Seven letters, all acted on and archived: Astrolect S86 and TradeComrade S769 (their late answers to the
+- **Mailbox.** Seven letters, all acted on and archived: two other projects (their late answers to the
   2026-10-24 question) folded into the spec (`ae6eaa7`: sections 0, 13, 14; launch lists are commercial and stay in the
   app; Ulak never alters a body; an app moves a flow only after its privacy text names the vendor) and answered;
-  FabervantOps S256/S257 (the account opens under the owner's Zoho login) noted and answered; S259 (draw HOME INDEX)
-  answered as not applicable (Ulak has no public screen; a search of src, test and docs found no Home Index text);
-  S260 (account not opened, no CPaaS DNS record as of 14:00) and S260 (Home Index v1.4 lean checks, no reply asked;
+  the operations project S256/S257 (the account opens under the owner's vendor login) noted and answered; S259 (draw a company review)
+  answered as not applicable (Ulak has no public screen; a search of src, test and docs found no company review text);
+  S260 (account not opened, no vendor DNS record as of 14:00) and S260 (company review v1.4 lean checks, no reply asked;
   folded into the phase 1 admin page).
-- **Owner, TradeComrade's Telegram alerts:** "Stays in the app (Recommended)": recorded as option O9 (off) in the spec,
-  TradeComrade told.
-- **Phase 0 ship:** blocked; asked FabervantOps (owner: "COO is live"), whose S260 answer is that the account, the
+- **Owner, another project's Telegram alerts:** "Stays in the app (Recommended)": recorded as option O9 (off) in the spec,
+  that project told.
+- **Phase 0 ship:** blocked; asked the operations project (owner: "COO is live"), whose S260 answer is that the account, the
   validation form and the DNS are all not done yet.
 - **Owner: "Plan phase 1 now (Recommended)".** Plan `docs/superpowers/plans/2026-10-30-phase-1-legal-documents.md`
   (`9481ac4`): the copy table written once and stamped by guarded statements, alerts as rows, idempotency keys scoped
   by kind, the keeping period and the retry window as settings the legal reads fill. Stress test: the owner chose
   "Daily reminder (Recommended)" for open alerts. An independent reviewer found 2 high, 7 medium, 8 low; all folded in
-  (the plan's last section lists them). Legal reads 3, 6, 11 and the receipt check asked of FabervantOps
-  (`letters/FabervantOps/2026-10-30-ulak-s15-phase-1-reads-3-6-11.md`). Not built: built after phase 0 ships.
-- **Legal reads 3, 6, 11 and the receipt check answered** (FabervantOps S260, same day; letter archived) and folded
+  (the plan's last section lists them). Legal reads 3, 6, 11 and the receipt check asked of the operations project
+  (the letter to the operations project). Not built: built after phase 0 ships.
+- **Legal reads 3, 6, 11 and the receipt check answered** (the operations project S260, same day; letter archived) and folded
   into the phase 1 plan: copies kept 3 years from the subscription's end (the sale for a one-off), reported by a new
   `POST /v1/mail/legal/end`, a copy with no end never deleted; `text_sha256` and the receiving server kept as evidence;
   24-hour window and HTML refusal confirmed; the provider's receipt does not shrink phase 1. TTK art 82 (10 years) is on
@@ -138,10 +138,10 @@ Mailbox cleared, the last two apps' answers folded into the spec, phase 1 planne
 
 Phase 0 of the approved communication spec (O2) built, reviewed and committed; not deployed.
 
-- **Mailbox.** Empty at start. During the session FabervantOps S256 sent legal read 4 (READY AFTER FIXES) and its gate
+- **Mailbox.** Empty at start. During the session the operations project S256 sent legal read 4 (READY AFTER FIXES) and its gate
   change; acted on (fixes applied, `80fe7c4`), answered, archived.
-- **Vendor documentation read** (vendor option 1): the product was renamed (ZeptoMail is now Zoho CPaaS, 2026-09-23;
-  keys and agents unchanged; send API documented at `cpaas.zoho.com/v1.1/email`); no send-time code for a suppressed
+- **Vendor documentation read** (vendor option 1): the product was renamed (the old product name was replaced, 2026-09-23;
+  keys and agents unchanged; send API documented at the vendor's global host); no send-time code for a suppressed
   recipient; auto-suppression covers hard bounces only; webhooks signed with HMAC-SHA256 (`producer-signature`) over the
   decoded form parameter. Saved copies in the session scratchpad only.
 - **Plan** `docs/superpowers/plans/2026-10-28-phase-0-sending.md` (`25dd66f`), stress-tested with /grill-me. Owner's
@@ -165,21 +165,21 @@ Phase 0 of the approved communication spec (O2) built, reviewed and committed; n
   not recur in 20 runs after the fixes; its cause was not confirmed.
 - **Proof:** 399 tests pass (`npm test`, verbose); typecheck and gitleaks clean; 17 planted defects in the first build
   and 9 in the review fixes each turned the mail tests red, tree restored each time.
-- **Privacy template** (legal read 4): draft sent; FabervantOps's six fixes applied in `docs/privacy-statement.md`
+- **Privacy template** (legal read 4): draft sent; the operations project's six fixes applied in `docs/privacy-statement.md`
   (10-year copies from the end of the purchase year, a legal ground per section, "a code made from your address with a
   secret key"). After the wrap-up its two sentences arrived (vendor log 60 days without text; transfer abroad) and
   went in word for word (`e2b3d13`), with "content storage off" added to the console steps; read 4 closed for section
-  A and "Where". FabervantOps added the vendor's processors row.
-- **Vendor account:** asked whether to open it under his own Zoho login, the owner answered "why don't we handle this
-  with COO?"; his words were sent to FabervantOps, which takes the account up with him.
-- **Letters:** to FabervantOps: phase 0 built, read 4 draft, four vendor facts (including that its mail gate missed the
-  `cpaas.zoho.*` host; it added it, read back in `mail_vendor_gate.py`); then the fixes applied.
+  A and "Where". The operations project added the vendor's processors row.
+- **Vendor account:** asked whether to open it under his own vendor login, the owner answered "why don't we handle this
+  with COO?"; his words were sent to the operations project, which takes the account up with him.
+- **Letters:** to the operations project: phase 0 built, read 4 draft, four vendor facts (including that its mail gate missed the
+  the vendor's host host; it added it, read back in `mail_vendor_gate.py`); then the fixes applied.
 
 ## Session 13 — 2026-10-28
 
 Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
 
-- **Mailbox.** FabervantOps S256's second review of draft 2 (NOT YET: 2 high, 5 medium, 14 low; all
+- **Mailbox.** The operations project S256's second review of draft 2 (NOT YET: 2 high, 5 medium, 14 low; all
   15 draft-1 findings closed) acted on and archived.
 - **Spec draft 3** (`cd15ec1`), every finding taken as written:
   - N1: section 0 and decision 1 say vendor options 1 and 2 change the owner's standing mail rule
@@ -188,7 +188,7 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
     events and the vendor's bounce list. Option 1 still recommended for those reports (agent).
   - N2: optional `html` part on `transactional` mail, https links only, `422 bad_html`, never
     rendered, refused on `legal_document`; chosen over a "no HTML" decision because the owner's S253
-    pick ("Fuller mail + dashboards") needs it (agent, FabervantOps's recommended fix).
+    pick ("Fuller mail + dashboards") needs it (agent, the operations project's recommended fix).
   - N3 delivery gain "possible, unproven"; N4 `202 held` plus owner alert for an address-dependent
     refusal of a legal document, `422` kept for the app's own mistakes; N5 AI-assistant row gates
     phase 2; N6 withdrawal-word flagging moved to option O8 with its three conditions; N7 sale
@@ -202,46 +202,46 @@ Mailbox (1 letter); communication-service spec draft 3 (O2) out for the re-read.
     stated, "evidence" not "proof", forwarded `Received` time acceptance, product fingerprints
     generalised, Ulak's size 4,850 lines so +66%). Public-repo grep for project, vendor and person
     names: none.
-- Letters: FabervantOps (re-read `cd15ec1`, source links, ask for the plain-text durable-medium read
-  before the final version); GRIDIGMA (four app-side changes; asked for AGREED).
+- Letters: The operations project (re-read `cd15ec1`, source links, ask for the plain-text durable-medium read
+  before the final version); the first client (four app-side changes; asked for AGREED).
 - After the first wrap-up, two more letters, both acted on and archived:
-  - GRIDIGMA S565: draft 3 AGREED with one change: its sale event comes from a subscription service,
+  - The first client S565: draft 3 AGREED with one change: its sale event comes from a subscription service,
     not the payment provider, so 5.4's wait cap and look-back now come from each app's own sale-event
     sender (`62f5353`). Read in that service's webhook documentation: 60 s timeout, 5 retries over
-    about 80 minutes. Told GRIDIGMA and FabervantOps.
-  - FabervantOps S256 review of `cd15ec1`: N1-N7 closed; one medium (N-A: `held` could not be in the
+    about 80 minutes. Told the first client and the operations project.
+  - The operations project S256 review of `cd15ec1`: N1-N7 closed; one medium (N-A: `held` could not be in the
     `202`, because a legal call is answered before the first attempt) and nine low items, all fixed
     as written (`fdcb269`): `held` is now a stored state; Ulak sets Reply-To; `html` carries no
     images; option 0 says a bounced legal document is never detected and Ulak never uses the owner's
     own login secret; only the legal call inside the sale handler; remedy path for a held document.
     Its durable-medium read accepts plain text on three conditions, now in 5.4, read 11 and decision 2
     (no longer conditional). Re-read asked at `fdcb269`, with option 0's daily limit and Apple relay
-    question; GRIDIGMA told of three app-side lines.
-- Two more letters, acted on and archived: GRIDIGMA S565 AGREED at `fdcb269` (it sets no Reply-To
-  today and its mail HTML has no images); FabervantOps S256 read `62f5353` as consistent with one low,
+    question; the first client told of three app-side lines.
+- Two more letters, acted on and archived: The first client S565 AGREED at `fdcb269` (it sets no Reply-To
+  today and its mail HTML has no images); the operations project S256 read `62f5353` as consistent with one low,
   fixed as its first option: the reconciliation look-back is never less than two days (`ba2e91c`).
-  Told FabervantOps; its re-read of `cd15ec1..ba2e91c` is what remains.
-- FabervantOps S256: `fdcb269` AGREED, with its two option-0 reads, folded in (`e82a60e`): the
+  Told the operations project; its re-read of `cd15ec1..ba2e91c` is what remains.
+- The operations project S256: `fdcb269` AGREED, with its two option-0 reads, folded in (`e82a60e`): the
   current account has one outgoing quota of 50-500 mails an hour shared by every app and the
   company's own mail, no bursts, up to an hour's stop when exceeded; the Apple relay registration
-  already covers the company domain. With GRIDIGMA's AGREED, the spec is marked the final version
-  for the owner's approval (`ce045ca`). FabervantOps's last letter ("ba2e91c - AGREED, nothing
+  already covers the company domain. With the first client's AGREED, the spec is marked the final version
+  for the owner's approval (`ce045ca`). The operations project's last letter ("ba2e91c - AGREED, nothing
   open") archived; told it the final version is with the owner.
 - **Owner's decisions on the final spec** (pop-ups, S13): decision 2 "Plain text in the mail
   (Recommended)", asked twice at his request with the reasons against HTML attachments; recorded in
   the spec (`d9e06aa`). Decision 1: he picked "Mail service, option 1 (Recommended)", then asked why
   it is recommended; answered (delivery and bounce reports as legal evidence, bounced legal documents
   caught, one shared hourly quota on the current account; better inbox placement unproven); he
-  answered "yeah my pick of option 1 stands" (`51d6d90`). FabervantOps updated its mail-vendor gate
+  answered "yeah my pick of option 1 stands" (`51d6d90`). The operations project updated its mail-vendor gate
   for Ulak alone (hooks `554ef09`); the other apps keep their current path until they move to Ulak.
   Decisions 3-8, each his pick of the recommended choice: push stays in the apps; store reviews not
   now; forward the selling apps' mailboxes after a check; marketing mail off; sign-in backup kept
   until he says; no extras, phases 0-4 in order (`4f96476`).
 - **The spec is APPROVED** ("Approve, start phase 0 (Recommended)", `9366f0c`). Letters:
-  FabervantOps (decisions 3-8, the approval, what phase 0 needs from it), GRIDIGMA and TEGlyx (spec
-  approved, current contract unchanged, they are written to before their mails move). FabervantOps's
+  the operations project (decisions 3-8, the approval, what phase 0 needs from it), the first client and the second client (spec
+  approved, current contract unchanged, they are written to before their mails move). The operations project's
   gate letter archived. Its "approval noted; phase-0 items" letter read and archived: the account
-  opens under the owner's login (FabervantOps asks him), DNS and processors row follow the account.
+  opens under the owner's login (the operations project asks him), DNS and processors row follow the account.
 - No code changed. Commits `cd15ec1`, `62f5353`, `fdcb269`, `ba2e91c`, `e82a60e`, `ce045ca`.
 
 ## Session 12 — 2026-10-28
@@ -250,23 +250,23 @@ Mailbox (11 letters), communication-service spec draft 2 (O2) out for the second
 admin sign-in proven live.
 
 - **Mailbox.** 10 letters at the start, 1 during; all 11 acted on and archived.
-  - FabervantOps S248 (delete non-coding history): MEMORY.md session index, the empty Blockers and
+  - The operations project S248 (delete non-coding history): MEMORY.md session index, the empty Blockers and
     Open decisions sections, and the copied plain-language pointer deleted; 124 lines / 10,399 B to
     80 lines / 7,244 B, memory_lint OK; CLAUDE.md unchanged (25 lines, 1,462 B). Reported by letter.
-    The same cut answers FabervantOps S253 (MEMORY.md under 120 lines).
-  - FabervantOps S251 (next prompt last; no file outside the project folder): read, followed.
-  - Answers from CashFlow, BooMoo, CoDoList, DuPari and TEGlyx folded into draft 2; TEGlyx (a client)
-    answered by letter. Astrolect and TradeComrade have not read the 2026-10-24 letter yet.
-- **Spec draft 2** (`ed24fbf`, amended `22664db`): GRIDIGMA's 12 points and FabervantOps's 15
+    The same cut answers the operations project S253 (MEMORY.md under 120 lines).
+  - The operations project S251 (next prompt last; no file outside the project folder): read, followed.
+  - Answers from four other projects and the second client folded into draft 2; the second client (a client)
+    answered by letter. Two other projects have not read the 2026-10-24 letter yet.
+- **Spec draft 2** (`ed24fbf`, amended `22664db`): The first client's 12 points and the operations project's 15
   findings folded in. New section 0, the owner's one screen: base phases 0-4 about 33 files / 3,200
   lines in Ulak plus about 8 apps x 150-500 lines; smallest Türkiye-documents path about 15 files /
   1,300 lines; vendor option 1 about $5 a year, option 2 $5 a month (prices read 2026-10-28 on the
   vendors' pages; option 1's per-credit amount only from third-party listings). Sign-in mails go
   after the app's answer, so nothing reveals an account; `immediate`/`durable` merged into one model
   bounded by each mail's `expires_at`; art 9 table; attachment decision put once with the exact
-  Decision wording; extras moved to options O1-O7. Sent to GRIDIGMA and FabervantOps.
-  - GRIDIGMA S565: AGREED, three notes; the status check capped at 2 s with no answer as ok, and a
-    daily reconciliation of sales against Ulak, folded in (`22664db`). FabervantOps told to review
+  Decision wording; extras moved to options O1-O7. Sent to the first client and the operations project.
+  - The first client S565: AGREED, three notes; the status check capped at 2 s with no answer as ok, and a
+    daily reconciliation of sales against Ulak, folded in (`22664db`). The operations project told to review
     that commit.
 - **Owner's admin sign-in after PKCE:** he asked for the address ("give me the address and I'll do
   it now"), signed in with his Google account; his screenshot shows the panel's message list. The
@@ -283,27 +283,27 @@ communication-service specification by the owner's new brief.
   archived, the session-ledger letter closes with this wrap-up's commit.
   - Nothing for Ulak (checked with `git grep`): the Codex/Hermes ruling, ads measure-only, the
     native Google exception, Paddle in Türkiye, `tmp/` already ignored.
-  - Home Index line (three letters): Ulak has no public screen; FabervantOps agreed, no feed.
+  - company review line (three letters): Ulak has no public screen; the operations project agreed, no feed.
   - Open orders: `## Owner's open orders` created in MEMORY.md, seeded from every recorded prompt
     and pop-up answer (the drift review's reading).
-  - PKCE: built and deployed (below), commit sent to FabervantOps.
-  - Türkiye documents (FabervantOps S248, GRIDIGMA S556) and "can Ulak send every app's mails":
+  - PKCE: built and deployed (below), commit sent to the operations project.
+  - Türkiye documents (the operations project S248, the first client S556) and "can Ulak send every app's mails":
     the smallest version was put to the owner; he stopped the question and gave a new brief (below).
 - **Owner's brief** (his words): "you don't need to build the smallest version. That was the brief
-  for GRIDIGMA, because it's not its core business - I mean communication. Yet, it is yours. You
+  for the first client, because it's not its core business - I mean communication. Yet, it is yours. You
   can build a capable software. My priority is that it will handle all the external communication
   of all our apps. The apps will build their bridges but you will handle the incoming and outgoing
   communication." Then: "We need to prepare a specification for the new features first. ...
   Please ask them to give you feedback so that you can prepare the specification. Then submit it
   to them for their initial review. For final version, come back to me for approval."
-  - Feedback asked of GRIDIGMA and FabervantOps; both answered (GRIDIGMA twice: facts and an
+  - Feedback asked of the first client and the operations project; both answered (the first client twice: facts and an
     unbiased view). The seven other mail-sending apps were asked by letter for their extras.
-  - FabervantOps relayed the owner's scope ruling: people outside the company only; agent messages
+  - The operations project relayed the owner's scope ruling: people outside the company only; agent messages
     and the company mailbox are not Ulak's.
   - A reader agent went through the first client's mail code (17 kinds of mail) and its 32
     never-shipped Türkiye patches for lessons (`tmp/comms-research.md`, not tracked).
   - Draft 1 written and sent to both for the initial review:
-    `docs/specs/2026-10-24-communication-service.md` (`fef3b6c`). GRIDIGMA's review arrived at wrap-up
+    `docs/specs/2026-10-24-communication-service.md` (`fef3b6c`). The first client's review arrived at wrap-up
     and waits in the mailbox for draft 2.
 - **Drift review** (maintenance session): no contradictions in sessions 1-10
   (`docs/drift-reviews/review-2026-10-24-up-to-10.md`). The rule-file audit was approved by the
@@ -314,7 +314,7 @@ communication-service specification by the owner's new brief.
   O18 dialog question escaping pinned; O19 sub-millisecond `since` pinned (the signed-year case
   cannot pass `isIso`); O20 was a real bug - the admin JSON API compared `since` as raw text, so
   an offset or millisecond-less value skipped messages; fixed with the shared `storedIso`.
-- **PKCE S256 on the admin Google sign-in** (`0e18799`), letter of FabervantOps S235: verifier in
+- **PKCE S256 on the admin Google sign-in** (`0e18799`), letter of the operations project S235: verifier in
   the state cookie, challenge to Google, verifier on the exchange, a callback without one refused.
   Red tests first; an independent review found 0 defects with 5 planted breaks all red.
   Deployed (owner's approval); live: S256 challenge sent, verifier absent from the URL, 400
@@ -328,11 +328,11 @@ Mailbox (10 letters), refactor round 1 on `src/api/index.ts`, the Session 9 depl
 probe, confirm dialogs on the five destructive admin actions (deployed), the credentials moved
 inside the root.
 
-- **Mailbox.** Ten letters, all acted on and archived; answered live to FabervantOps.
+- **Mailbox.** Ten letters, all acted on and archived; answered live to the operations project.
   - GA / 31 countries, statistics box, sign-in standard (document, section 11), standards rollout,
     footer layout: no surface. Ulak has no public UI, and the operator panel is Google-only by
-    redirect. FabervantOps agreed: no footer, card or sign-in standard applies.
-  - Legal name: `LICENSE` reads "Fabervant Teknoloji Anonim Şirketi". FabervantOps approved it,
+    redirect. The operations project agreed: no footer, card or sign-in standard applies.
+  - Legal name: `LICENSE` reads "Fabervant Teknoloji Anonim Şirketi". The operations project approved it,
     the owner approved the push. The dated 2026-09-05 plan was left as history. The live
     `CONTROLLER_NAME` setting also carried the short form; it was changed and read back from the
     deployed version. No code reads it today; it names the controller for the privacy template.
@@ -340,7 +340,7 @@ inside the root.
     posted on one click.
   - Code ruling sweep: 0 owner-credited values (`docs/audits/2026-10-14-owner-ruling-sweep.md`).
   - No folder outside the root. Owner's choice: move everything. Ten credential files went from
-    his Desktop store into `.secrets/` (git-ignored), with matching SHA-256. GRIDIGMA confirmed
+    his Desktop store into `.secrets/` (git-ignored), with matching SHA-256. The first client confirmed
     nothing of theirs reads the old path; the emptied Desktop folder is his and stays.
     `tmp/` is git-ignored for session scratch.
 - **Refactor round 1, `src/api/index.ts`, CLOSED** (`05d15d9`). There was 1 defect, which
@@ -357,7 +357,7 @@ inside the root.
   - a `since` written `+03:00` without milliseconds read the same three rows.
   The owner rotated its key in the panel and refreshed. The key hash changed once, and the old
   key now answers 401. The app and its rows were deleted and read back at zero; two real apps
-  remain. GRIDIGMA was told live; TEGlyx by letter, for its one live read.
+  remain. The first client was told live; the second client by letter, for its one live read.
 - **Confirm dialogs** (owner: all five; `60fe68c`, `112751b`, deployed). Delete user data,
   Rotate key, New notice key, Revoke and Sign out everywhere each open a dialog over the dimmed,
   blurred page, and only its own button posts. It is pure CSS `:target`, because the panel's CSP
