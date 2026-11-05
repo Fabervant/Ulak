@@ -343,6 +343,18 @@ describe("the vendor's events", () => {
     expect((await send(key)).status).toBe(422);
   });
 
+  it("reads the event's name when the vendor sends it as a list, as its console's preview shows", async () => {
+    const key = await mailApp();
+    const { id } = await (await send(key)).json<{ id: string }>();
+    const json = JSON.stringify({ event_name: ["hardbounce"], event_message: [{ email_info: { client_reference: id }, event_data: [{ object: "email", details: [{ reason: "Mailbox not found" }] }], request_id: "req-1" }] });
+    const { body, header } = await vendorSigned(json, MAIL.MAIL_WEBHOOK_KEY, Date.now());
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "producer-signature": header }, body }), menv(), ctx);
+    await waitOnExecutionContext(ctx);
+    expect(await res.json()).toEqual({ applied: 1 });
+    expect((await row(id)).status).toBe("bounced");
+  });
+
   it("the console's address check gets its 200 and changes nothing; an unsigned event is still refused", async () => {
     const key = await mailApp();
     const { id } = await (await send(key)).json<{ id: string }>();
@@ -353,7 +365,7 @@ describe("the vendor's events", () => {
       await waitOnExecutionContext(ctx);
       return res;
     };
-    for (const init of [{ method: "GET" }, { method: "HEAD" }, { method: "POST" }]) expect((await ask(init)).status).toBe(200);
+    expect((await ask({ method: "POST" })).status).toBe(200);
     const refused = await ask({ method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "data=%7B%7D" });
     expect(refused.status).toBe(401);
     expect(await row(id)).toEqual(before);

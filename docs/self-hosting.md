@@ -191,12 +191,13 @@ In the vendor's console, for the agent Ulak sends with:
 3. Turn **auto-suppression** on for hard bounces, for this agent (the console's *Suppression list*
    section), and leave **Save content for all Agents** unticked (*Settings, Content retention*), so the
    vendor's 60-day delivery log holds no mail text (the privacy statement says it does not).
-4. Before you deploy, type a long random value as the agent's **Authentication Key** (*Agents*, the
-   agent, *Webhooks*, *Authentication Key*) and put the same value in `MAIL_WEBHOOK_KEY`.
-   After you deploy, add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard
-   bounce, delivered and feedback loop (spam complaints); open and click off. The console's *Verify*
-   button needs a `200`: a `GET` or an empty unsigned `POST` gets one and changes nothing. Any other
-   request without a valid signature less than five minutes old is refused. The vendor signs the event, not its timestamp, so
+4. Choose a long random value and put it in `MAIL_WEBHOOK_KEY` before you deploy. After you deploy,
+   add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
+   and feedback loop (spam complaints); open and click off. Then type the same value as the agent's
+   **Authentication Key** (*Agents*, the agent, *Webhooks*, *Authentication Key*); the console did not
+   show that button while the agent had no webhook. The console's *Verify* button needs a `200`: an
+   empty unsigned `POST` gets one and changes nothing. Any other request without a valid signature
+   less than five minutes old is refused. The vendor signs the event, not its timestamp, so
    the window cannot stop a replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
 6. If you turn on the vendor's sender-address restriction, list exactly the `<app id>@` addresses of
