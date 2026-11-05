@@ -85,7 +85,7 @@ function parseOne(raw: unknown): MailEvent {
   const data = (m.event_data ?? {}) as Record<string, any>;
   const d = (Array.isArray(data) ? data[0] ?? {} : data) as Record<string, any>;
   const details = (Array.isArray(d.details) ? d.details[0] ?? {} : d.details ?? {}) as Record<string, any>;
-  // The console's preview sends event_name as a list and an object that names the channel, not the event.
+  // The console's preview sends event_name as a list; event_data's object also names the event.
   const name = s(Array.isArray(e.event_name) ? e.event_name[0] : e.event_name);
   const object = `${s(d.object) ?? ""} ${name ?? ""}`.toLowerCase().replace(/[\s_-]+/g, " ");
   const ref = s(info.client_reference);

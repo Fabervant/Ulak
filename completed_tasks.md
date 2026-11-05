@@ -34,7 +34,8 @@ through the owner's inbox. The second client answered the deploy letter, so both
   deploy or the live checks. Recommended to the owner: deploy inside the limit with client apps off for mail; not deployed, his word
   awaited. Ulak made the webhook key (kept in `.secrets\`, never printed) and gave him the console steps one by one.
 - **What the console itself showed (the owner's screenshots):** the bounce list and content box are set. The Add webhook box's preview sends
-  `event_name` as a list, which the parser dropped, so a real event could have been ignored: fixed, the test red first. The box says POST
+  `event_name` as a list, which the parser dropped; now read, test red first. The Delivered and Hard bounces previews show `event_data`'s
+  object also names the event, which the parser already read, so these previews would have parsed before the fix. The box says POST
   only, so the GET answer added earlier is removed. The empty Webhooks tab has no Authentication Key button, so the key goes on the agent
   after the webhook is added, and `docs/self-hosting.md` says so. The preview's delivered event is pinned by a test; it names no
   receiving server, so that field of a legal copy's evidence may stay empty until a real event shows otherwise.
