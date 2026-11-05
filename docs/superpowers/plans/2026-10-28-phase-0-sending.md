@@ -226,7 +226,8 @@ Nothing of a mail is logged but its id, app, label, status and a scrubbed error.
 - One real mail to an address of the operator's own: received; its raw source read: From, Reply-To, DKIM `d=` the company
   domain, no tracking pixel, links unchanged. Its delivered event stored.
 - One real mail to a real hidden Apple address arrives (spec 5.5); the vendor's bounce domain recorded.
-- A mail to a suppressed address: what the vendor's send call answers is read and recorded here.
+- A mail to a suppressed address: what the vendor's send call answers is read and recorded here. Read 2026-11-06: the send
+  call accepts it, then a hard bounce event follows with reason `email-suppression` and status 5.1.8.
 - `GET /v1/mail/status` answers `ok`.
 
 ## Decisions (stress test, owner, Session 14)

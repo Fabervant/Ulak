@@ -35,7 +35,8 @@ through the owner's inbox. The second client answered the deploy letter, so both
   app (owner: "yes, you may"), its send key given for the run and taken back: answered 202, received; raw source: DKIM pass with `d=` the company domain, SPF
   pass, DMARC pass, From and Reply-To right, no image, link unchanged, sender block in both parts. Its delivered event set the mail to delivered. Status `ok`.
   A legal document answered `422 kind_not_allowed`. A second mail to a real hidden Apple address: the vendor's delivered event arrived and the relay forwarded it to the
-  company mailbox, with the bounce domain `bounce-zem` under the company domain. Still open: a suppressed address's send answer.
+  company mailbox, with the bounce domain `bounce-zem` under the company domain. A third mail to an address on the vendor's list: its send call accepted it, and a hard bounce
+  event followed with `email-suppression 5.1.8`, so Ulak marked it bounced. Phase 0's live list is passed; the three test rows are deleted.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
