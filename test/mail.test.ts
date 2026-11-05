@@ -311,6 +311,14 @@ describe("the vendor's events", () => {
     return res;
   }
 
+  async function signedEvent(payload: unknown) {
+    const { body, header } = await vendorSigned(JSON.stringify(payload), MAIL.MAIL_WEBHOOK_KEY, Date.now());
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "producer-signature": header }, body }), menv(), ctx);
+    await waitOnExecutionContext(ctx);
+    return res;
+  }
+
   it("a delivered event is stored", async () => {
     const key = await mailApp();
     const { id } = await (await send(key)).json<{ id: string }>();
@@ -346,13 +354,21 @@ describe("the vendor's events", () => {
   it("reads the event's name when the vendor sends it as a list, as its console's preview shows", async () => {
     const key = await mailApp();
     const { id } = await (await send(key)).json<{ id: string }>();
-    const json = JSON.stringify({ event_name: ["hardbounce"], event_message: [{ email_info: { client_reference: id }, event_data: [{ object: "email", details: [{ reason: "Mailbox not found" }] }], request_id: "req-1" }] });
-    const { body, header } = await vendorSigned(json, MAIL.MAIL_WEBHOOK_KEY, Date.now());
-    const ctx = createExecutionContext();
-    const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "producer-signature": header }, body }), menv(), ctx);
-    await waitOnExecutionContext(ctx);
+    const res = await signedEvent({ event_name: ["hardbounce"], event_message: [{ email_info: { client_reference: id }, event_data: [{ object: "email", details: [{ reason: "Mailbox not found" }] }], request_id: "req-1" }] });
     expect(await res.json()).toEqual({ applied: 1 });
     expect((await row(id)).status).toBe("bounced");
+  });
+
+  it("reads a delivered event in the shape of the console's preview, which names no receiving server", async () => {
+    const key = await mailApp();
+    const { id } = await (await send(key)).json<{ id: string }>();
+    const res = await signedEvent({
+      event_name: ["delivered"],
+      event_message: [{ email_info: { client_reference: id, object: "email" }, event_data: [{ details: [{ recipient: "person@example.org", status: "DELIVERED" }], object: "email_delivery" }], request_id: "req-1" }],
+      webhook_request_id: "wh-1",
+    });
+    expect(await res.json()).toEqual({ applied: 1 });
+    expect(await row(id)).toMatchObject({ status: "delivered" });
   });
 
   it("the console's address check gets its 200 and changes nothing; an unsigned event is still refused", async () => {
