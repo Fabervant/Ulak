@@ -25,6 +25,9 @@ through the owner's inbox. The second client answered the deploy letter, so both
   on its break.
 - **Webhook address check:** the console's Verify needs a 200, and its help does not say how it asks. A GET and an empty unsigned
   POST now get one and change nothing; any other unsigned request is still refused. The real request is to be read at Verify.
+- **Deployed, owner: "yeah, deploy":** the API, admin and image Workers, migrations 0005-0007 and the six mail settings. Read back: empty POST to
+  the events route 200, unsigned body 401, unknown routes in the error shape, a client poll 200, the result check ok. Legal documents stay refused and
+  client apps have no mail. Live acceptance not yet run: it needs the webhook.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a
