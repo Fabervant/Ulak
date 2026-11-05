@@ -131,12 +131,17 @@ export function mountMail(app: Hono<Ctx>): void {
   // The vendor's delivery, bounce and complaint reports. No key: the vendor's signature instead.
   // The vendor signs the payload only, not the header's timestamp, so the five-minute window limits
   // stale deliveries but cannot stop a replay of a captured event; every event is safe to apply twice.
-  // The vendor's console asks for a 200 by POST before it adds a webhook, and may not sign that call.
-  // An empty unsigned POST carries no event, so answering it changes nothing.
+  // The vendor's console checks a webhook address by an unsigned JSON POST and needs a 200 (read from
+  // the live log, S20). Real events are signed and form-encoded, so an unsigned POST in any other
+  // encoding is answered and nothing in it is applied.
   app.post("/v1/mail/events", async (c) => {
     const cfg = requireMailConfig(c.env);
     const body = await readTextCapped(c.req.raw, MAIL_MAX_BODY_BYTES); // 413 before buffering more
-    if (!body && !c.req.header("producer-signature")) return c.json({ applied: 0 });
+    const formEncoded = (c.req.header("content-type") ?? "").includes("application/x-www-form-urlencoded");
+    if (!c.req.header("producer-signature") && !formEncoded) {
+      console.warn("mail events: an unsigned check answered, nothing applied");
+      return c.json({ applied: 0 });
+    }
     const payload = signedPayload(body, c.req.header("content-type") ?? "");
     if (payload === null || !(await verifySignature(c.req.header("producer-signature") ?? null, payload, cfg.webhookKey, Date.now()))) {
       throw new ApiError(401, "bad_signature", "missing or invalid signature", false);

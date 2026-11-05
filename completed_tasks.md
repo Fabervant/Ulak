@@ -29,6 +29,8 @@ through the owner's inbox. The second client answered the deploy letter, so both
   the events route 200, unsigned body 401, unknown routes in the error shape, a client poll 200, the result check ok. Legal documents stay refused and
   client apps have no mail. Live acceptance not yet run: it needs the webhook. The first client answered: it reads a refusal's `error` and
   `retryable` on its send and upload paths, which the new shape fits, and nothing changes on its side.
+- **Verify, read from the live log:** the console's check is an unsigned JSON POST, not an empty one, and the route refused it. Now an unsigned POST
+  that is not form-encoded gets a 200 and nothing in it is applied; an unsigned form-encoded one or a bad signature is still 401. Test red first, deployed.
 - **Result:** `npm test` 521 of 521, typecheck clean, gitleaks clean.
 - **Two later letters from the operations project, read at 23:06:** no validation answer found; the console steps are on the
   owner's list in the order Ulak gave. A new reading of a company standard on speed and crash reports: nothing to build, since a

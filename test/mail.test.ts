@@ -382,6 +382,8 @@ describe("the vendor's events", () => {
       return res;
     };
     expect((await ask({ method: "POST" })).status).toBe(200);
+    const check = await ask({ method: "POST", headers: { "content-type": "application/json; charset=UTF-8" }, body: JSON.stringify({ event_name: ["hardbounce"], event_message: [{ email_info: { client_reference: id }, event_data: [{ object: "hardbounce" }] }] }) });
+    expect(await check.json()).toEqual({ applied: 0 });
     const refused = await ask({ method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: "data=%7B%7D" });
     expect(refused.status).toBe(401);
     expect(await row(id)).toEqual(before);

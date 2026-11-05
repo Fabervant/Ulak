@@ -195,9 +195,9 @@ In the vendor's console, for the agent Ulak sends with:
    add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
    and feedback loop (spam complaints); open and click off. Then type the same value as the agent's
    **Authentication Key** (*Agents*, the agent, *Webhooks*, *Authentication Key*); the console did not
-   show that button while the agent had no webhook. The console's *Verify* button needs a `200`: an
-   empty unsigned `POST` gets one and changes nothing. Any other request without a valid signature
-   less than five minutes old is refused. The vendor signs the event, not its timestamp, so
+   show that button while the agent had no webhook. The console's *Verify* button sends an unsigned JSON
+   `POST` and needs a `200`: an unsigned `POST` that is not form-encoded gets one and nothing in it is
+   applied. Any other request without a valid signature less than five minutes old is refused. The vendor signs the event, not its timestamp, so
    the window cannot stop a replay of a captured event; every event is safe to apply twice.
 5. Send the console's test hard bounce and check that `/v1/mail/events` answered `200`.
 6. If you turn on the vendor's sender-address restriction, list exactly the `<app id>@` addresses of
