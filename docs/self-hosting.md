@@ -191,7 +191,7 @@ In the vendor's console, for the agent Ulak sends with:
 3. Turn **auto-suppression** on for hard bounces, for this agent (the console's *Suppression list*
    section), and leave **Save content for all Agents** unticked (*Settings, Content retention*), so the
    vendor's 60-day delivery log holds no mail text (the privacy statement says it does not).
-4. Choose a long random value and put it in `MAIL_WEBHOOK_KEY` before you deploy. After you deploy,
+4. Choose a random value of at most 50 characters, the console's limit, and put it in `MAIL_WEBHOOK_KEY` before you deploy. After you deploy,
    add a webhook: URL `https://<api host>/v1/mail/events`; events soft bounce, hard bounce, delivered
    and feedback loop (spam complaints); open and click off. Then type the same value as the agent's
    **Authentication Key** (*Agents*, the agent, *Webhooks*, *Authentication Key*); the console did not
