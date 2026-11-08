@@ -1,5 +1,30 @@
 # Completed tasks
 
+## Session 21 — 2026-11-08
+
+Phase 1 (legal documents) went live and passed its live list.
+
+- **Mailbox:** eight letters read, acted on and archived: tax rule (nothing sold), wrap-up leftovers, the second client's answer on
+  `not_found` (nothing to do), the skipped-issues review (2 entries checked at source: 0 delete, 2 still waiting, 0 ready; nothing for the
+  owner to approve), Cockpit's solo fix, `/design`, one item per session, and FabervantOps S286 (below). Three letters written to FabervantOps.
+- **Phase 1 live:** `LEGAL_KEEP_DAYS=1096`, `npm test` 525/525, API deployed. Owner: "Yes, run A and B (Recommended)". Run A: a legal
+  document to the owner's address answered 202 in 0.8 s, delivered; raw source plain text, DKIM/SPF/DMARC pass, link unchanged; the
+  kept copy and sender block equal the received body, hash checks; the repeat answered the first id and sent nothing. Run B: a bounced row
+  planted inside Ulak for a test address, the legal document held (nothing sent), one alert told on Telegram (the owner's screenshot,
+  22:28); deletion by address `deleted_mails 2, kept_legal_copies 1`, the copy kept with its reference cleared. The owner downloaded the copy
+  (body byte-equal to the received mail, ends with the sender block, hash checks) and closed the held alert by hand.
+- **Receiving server:** Zoho's delivered event names none, and its help documents no fields for that event. FabervantOps S286: the evidence is
+  enough without it; keep the raw delivered event beside the copy. Built: migration 0008 `delivered_event`, kept once from the first delivered
+  event; a payload of one event is kept byte for byte, a batch keeps only that copy's own event; the download shows it as one quoted line above
+  the body. 527/527 tests; three planted defects each caught. Owner: "Yes, deploy (Recommended)"; migration applied and read back, API and admin
+  deployed; a third test mail (owner: "Yes, send one (Recommended)") stored a 1015-character event, confirming no receiving server.
+- **Privacy text mismatch** found and sent to FabervantOps: the unpublished legal section says 10 years from the end of the purchase year, the
+  live setting is 1096 days from the sale or subscription end.
+- **Old scratch:** owner: "Delete, keep the three (Recommended)"; 169 entries removed from `tmp/` after removing a junction to the real
+  `node_modules` on its own (read intact after).
+- **Other plans (S11):** owner: Ulak delivering incoming mail to agents was refused by FabervantOps for now; "Park the thought". Parked in MEMORY.
+- **Work ledger:** `docs/work_ledger.md` started, one line per blocked item.
+
 ## Session 20 — 2026-11-05
 
 Maintenance session. Nothing deployed: phase 0 still waits on the vendor's validation of its account and the three values

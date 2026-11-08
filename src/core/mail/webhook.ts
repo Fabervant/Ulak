@@ -45,7 +45,7 @@ export async function verifySignature(header: string | null, payload: string, ke
 
 export type MailEvent =
   | { type: "hardbounce" | "softbounce" | "complaint"; ref: string | null; requestId: string | null; reason: string }
-  | { type: "delivered"; ref: string | null; requestId: string | null; server: string | null }
+  | { type: "delivered"; ref: string | null; requestId: string | null; server: string | null; raw: string }
   | { type: "ignored" };
 
 const s = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
@@ -64,8 +64,10 @@ function receivingServer(details: Record<string, any>): string | null {
   return null;
 }
 
-/** The events of one webhook payload: one object or an array of them. Nothing of the recipient is kept;
- *  a bounce reason is scrubbed of addresses before it leaves this function. */
+/** The events of one webhook payload: one object or an array of them. A bounce reason is scrubbed of
+ *  addresses before it leaves this function. A delivered event carries its own text as the vendor sent
+ *  it: the payload itself when it holds that one event, else that event alone, so a copy never keeps
+ *  another mail's event. */
 export function parseEvents(payload: string): MailEvent[] {
   let data: unknown;
   try {
@@ -73,10 +75,11 @@ export function parseEvents(payload: string): MailEvent[] {
   } catch {
     return [];
   }
-  return (Array.isArray(data) ? data : [data]).map(parseOne);
+  const events = Array.isArray(data) ? data : [data];
+  return events.map((e) => parseOne(e, events.length === 1 ? payload : JSON.stringify(e)));
 }
 
-function parseOne(raw: unknown): MailEvent {
+function parseOne(raw: unknown, text: string): MailEvent {
   const e = (raw ?? {}) as Record<string, any>;
   const msg = (e.event_message ?? {}) as Record<string, any>;
   // Some payloads carry event_message as an array of one.
@@ -97,7 +100,7 @@ function parseOne(raw: unknown): MailEvent {
   if (/hard ?bounce/.test(object)) return { type: "hardbounce", ref, requestId, reason };
   if (/soft ?bounce/.test(object)) return { type: "softbounce", ref, requestId, reason };
   if (/fbl|complaint|feedback/.test(object)) return { type: "complaint", ref, requestId, reason };
-  if (/deliver/.test(object) && !/undeliver/.test(object)) return { type: "delivered", ref, requestId, server: receivingServer(details) };
+  if (/deliver/.test(object) && !/undeliver/.test(object)) return { type: "delivered", ref, requestId, server: receivingServer(details), raw: text };
   return { type: "ignored" };
 }
 
@@ -111,7 +114,7 @@ export async function applyEvent(db: D1Database, ev: MailEvent, now: string): Pr
   const legal = await legalIdForEvent(db, ev.ref, ev.requestId);
   if (!legal) return changed;
   await stampSentFromEvent(db, legal, ev.requestId, now);
-  if (ev.type === "delivered") return (await stampDelivered(db, legal, null, ev.server, now)) || changed;
+  if (ev.type === "delivered") return (await stampDelivered(db, legal, null, ev.server, now, ev.raw)) || changed;
   if (ev.type === "hardbounce" && (await openAlert(db, legal, "bounced", now))) return true;
   return changed;
 }

@@ -127,12 +127,17 @@ async function event(mailId: string | null, object: string, extra: { requestId?:
       },
     ],
   });
+  return signedPayloadEvent(json).then(() => undefined);
+}
+
+/** Posts one exact payload as the vendor would, signed and form-encoded; returns the route's answer. */
+async function signedPayloadEvent(json: string) {
   const { body, header } = await vendorSigned(json, MAIL.MAIL_WEBHOOK_KEY, Date.now());
   const ctx = createExecutionContext();
   const res = await worker.fetch(new Request("https://api.example.invalid/v1/mail/events", { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded", "producer-signature": header }, body }), lenv(), ctx);
   await waitOnExecutionContext(ctx);
   expect(res.status).toBe(200);
-  return res;
+  return res.json();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -451,6 +456,38 @@ describe("task 5: stamps and alerts on every transition", () => {
     expect((await copy(id))!).toMatchObject({ delivered_at: c.delivered_at, delivered_server: "mx.example.org" });
   });
 
+  it("the first delivered event is kept as the vendor sent it, once, and only that event of a batch", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    const other = await idOf(await sendLegal(key, { idempotency_key: "sale-other-0001", document: { version: "v1", reference: "O-2", sale: "one_off" } }));
+    // A payload of one event, spaced as a vendor might: kept byte for byte.
+    const one = JSON.stringify({ event_name: ["delivered"], event_message: [{ email_info: { client_reference: id }, event_data: [{ object: "email_delivery", details: [{ status: "DELIVERED" }] }], request_id: "req-1" }] }, null, 1);
+    expect(await signedPayloadEvent(one)).toEqual({ applied: 1 });
+    expect((await copy(id))!.delivered_event).toBe(one);
+    // A replay with other text changes nothing.
+    await event(id, "email_delivered");
+    expect((await copy(id))!.delivered_event).toBe(one);
+    // A batch: each copy keeps its own event, never the other's.
+    const mine = { event_name: "delivered", event_message: [{ email_info: { client_reference: other }, event_data: [{ object: "email_delivery" }], request_id: "req-2" }] };
+    const theirs = { event_name: "delivered", event_message: [{ email_info: { client_reference: "someone-else" }, event_data: [{ object: "email_delivery" }], request_id: "req-3" }] };
+    await signedPayloadEvent(JSON.stringify([theirs, mine]));
+    expect((await copy(other))!.delivered_event).toBe(JSON.stringify(mine));
+  });
+
+  it("a delivered event kept before the event's text is added later, never replacing one", async () => {
+    const key = await legalApp();
+    const id = await idOf(await sendLegal(key));
+    const first = addMinutes(nowIso(), 1);
+    await stampDelivered(env.DB, id, null, null, first);
+    expect((await copy(id))!.delivered_event).toBeNull();
+    await stampDelivered(env.DB, id, null, null, addMinutes(nowIso(), 2), '{"a":1}');
+    await stampDelivered(env.DB, id, null, null, addMinutes(nowIso(), 3), '{"b":2}');
+    expect(await copy(id)).toMatchObject({ delivered_at: first, delivered_event: '{"a":1}' });
+    // A later event that adds the receiving server still keeps the first event's text.
+    await stampDelivered(env.DB, id, null, "mx.example.org", addMinutes(nowIso(), 4), '{"c":3}');
+    expect(await copy(id)).toMatchObject({ delivered_at: first, delivered_server: "mx.example.org", delivered_event: '{"a":1}' });
+  });
+
   it("the acceptance is stamped once: a second stamp keeps the first time and id", async () => {
     const key = await legalApp();
     const id = await idOf(await sendLegal(key));
@@ -547,7 +584,7 @@ describe("task 5: stamps and alerts on every transition", () => {
     const key = await legalApp();
     replies.push(async () => {
       const id = (await env.DB.prepare("SELECT id FROM mails").first<{ id: string }>())!.id;
-      await applyEvent(env.DB, { type: "delivered", ref: id, requestId: "req-d", server: null }, nowIso());
+      await applyEvent(env.DB, { type: "delivered", ref: id, requestId: "req-d", server: null, raw: "{}" }, nowIso());
       return refusedAddress();
     });
     const id = await idOf(await sendLegal(key));
@@ -979,6 +1016,9 @@ describe("task 9: the admin panel", () => {
     expect(text).toContain(`Recipient: ${ADDRESS}`);
     expect(text).toContain("receiving server mx.example.org");
     expect(text).toContain("request req-1");
+    const [, quoted] = text.match(/^Delivered event as the mail service sent it: (.*)$/m)!;
+    expect(JSON.parse(quoted!)).toBe((await copy(id))!.delivered_event);
+    expect((await copy(id))!.delivered_event).toContain('"mx_host":"mx.example.org"');
     const [, subjectLine] = text.match(/^Subject: (.*)$/m)!;
     expect(text).toContain("Sender block under the document: as below");
     // The body is the mailed text: the document, then the sender block that went under it.

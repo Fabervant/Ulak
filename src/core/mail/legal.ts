@@ -102,6 +102,8 @@ export interface LegalDocument {
   vendor_request_id: string | null;
   delivered_at: string | null;
   delivered_server: string | null;
+  /** The first delivered event as the mail service sent it (migration 0008); kept as long as the copy. */
+  delivered_event: string | null;
   /** The sender block that closed the mailed document (migration 0007); null before the first attempt. */
   sender_info: string | null;
 }
@@ -193,15 +195,20 @@ export async function stampSent(db: D1Database, mailId: string, at: string, vend
 }
 
 /** The delivered event: stamped once on the copy, found by Ulak's id or the vendor's, even when the
- *  transport row is gone; the copy's open `undelivered` alert closes itself. Returns whether the copy changed. */
-export async function stampDelivered(db: D1Database, ref: string | null, requestId: string | null, server: string | null, now: string): Promise<boolean> {
+ *  transport row is gone; the copy's open `undelivered` alert closes itself. The event's own text is
+ *  kept once, from the first delivered event that carries one. Returns whether the copy changed. */
+export async function stampDelivered(db: D1Database, ref: string | null, requestId: string | null, server: string | null, now: string, raw: string | null = null): Promise<boolean> {
   const where = ref ? "mail_id=?" : "vendor_request_id=?";
   const key = ref ?? requestId;
   if (!key) return false;
   const doc = await db.prepare(`SELECT mail_id FROM legal_documents WHERE ${where}`).bind(key).first<{ mail_id: string }>();
   if (!doc) return false;
   const [stamp] = await db.batch([
-    db.prepare("UPDATE legal_documents SET delivered_at=COALESCE(delivered_at,?1), delivered_server=COALESCE(delivered_server,?2) WHERE mail_id=?3 AND (delivered_at IS NULL OR (delivered_server IS NULL AND ?2 IS NOT NULL))").bind(now, server, doc.mail_id),
+    db
+      .prepare(
+        "UPDATE legal_documents SET delivered_at=COALESCE(delivered_at,?1), delivered_server=COALESCE(delivered_server,?2), delivered_event=COALESCE(delivered_event,?4) WHERE mail_id=?3 AND (delivered_at IS NULL OR (delivered_server IS NULL AND ?2 IS NOT NULL) OR (delivered_event IS NULL AND ?4 IS NOT NULL))",
+      )
+      .bind(now, server, doc.mail_id, raw),
     db.prepare("UPDATE legal_alerts SET closed_at=?, close_reason='delivered' WHERE mail_id=? AND kind='undelivered' AND closed_at IS NULL").bind(now, doc.mail_id),
   ]);
   return (stamp!.meta.changes ?? 0) > 0;
@@ -462,6 +469,8 @@ export function copyText(d: LegalDocument): string {
     `Accepted by Ulak: ${d.created_at}`,
     `Accepted by the mail service: ${d.sent_at ?? "not yet"}${d.vendor_request_id ? ` (request ${d.vendor_request_id})` : ""}`,
     `Delivered: ${d.delivered_at ?? "no delivered event yet"}${d.delivered_server ? ` (receiving server ${d.delivered_server})` : ""}`,
+    // Quoted as one JSON string, so the vendor's text stays exact and on one line whatever it holds.
+    `Delivered event as the mail service sent it: ${d.delivered_event === null ? "none kept" : JSON.stringify(d.delivered_event)}`,
     `SHA-256 of the subject, a blank line and the text: ${d.text_sha256}`,
     `Sender block under the document: ${d.sender_info === null ? "none recorded" : "as below"}`,
     "",
