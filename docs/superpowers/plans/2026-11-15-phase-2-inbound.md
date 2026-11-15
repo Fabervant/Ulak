@@ -188,7 +188,14 @@ Each task: a failing test first, then the code, then `npm test`; one commit each
      inside a mixed message, and does not export its converter), so `src/core/inbound` turns the HTML part into
      text itself; its output is still only ever shown as text.
    - Waiting: operations' forward test (copy kept, original From kept, `Received` kept) ; task 2 waits for it, and a
-     "no" there goes to the owner first.
+     "no" there goes to the owner first. The test needs the owner to set a test filter in the mail provider
+     (operations, S325).
+   - Operations' reading of the mail provider's help pages (S325, to be confirmed by the test), which task 3 settles
+     before it starts: a per-address forward is a filter matching To or Cc, so a mail that reached the app address
+     by Bcc is not forwarded; the destination must first accept a verification mail from the provider, whose domain
+     the deny list drops, so that one mail needs a way to reach the operator; the provider allows only a few forward
+     addresses per account, so **one inbound address for every app, with the app read from the original To header**,
+     may replace one address per app.
 2. Migration `0009_inbound.sql` and the row types.
 3. Reply and forward addresses: build, sign, verify; `vendorBody`'s `Reply-To` by the app's switch.
 4. MIME parsing to the filing input: sender, text, images, automatic-mail and domain-check flags, arrival time.

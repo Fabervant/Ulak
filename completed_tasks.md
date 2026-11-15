@@ -13,6 +13,10 @@
   (`ULAK_TEST_ORDER=reverse`, imports `TestRunner` from `vitest`: the `vitest/runners` import hangs the Workers pool);
   the per-test wipe list (`test/wipedTables.ts`) checked against the schema. Normal run named 0; reverse 0 failed; 545 passed
   both ways. Lettered to operations with the figures.
+- **Mailbox (during wrap-up):** operations' S325 letter read and archived: received letters count from arrival (section C
+  stands); a subscription's legal copy is kept to the later of TTK and TBK 146 dates (to build next, [O3]; the end call's
+  retirement cancelled); privacy text ready after fixes; forward test waits on the owner's steps. Its forward points went
+  into the plan under task 1; answered by letter.
 
 ## Session 23 — 2026-11-15
 
