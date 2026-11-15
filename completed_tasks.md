@@ -13,6 +13,10 @@
   inside the copy @cloudflare/vitest-pool-workers pins (0.23.0 pins the same). Runtime deps unchanged. tsc clean, 548
   passed, three Workers bundle in a dry run.
 
+- **Letters (archived):** operations S326 re step 4 (Ulak on the fixed 15,360 B limit; nothing owed). Operations S326
+  asked whether Ulak carries other apps' operator alerts: answered yes, already live as `POST /v1/notify` (notice key,
+  owner-notices box, 10 a day, `[app]` prefix); nothing built; the payments service's key and box join its deploy question.
+
 ## Session 27 — 2026-11-15
 
 - **[K11] done:** rules review step 3. Quotes checked against `.session_prompts` (S299 rule): found word for word D3
