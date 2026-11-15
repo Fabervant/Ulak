@@ -14,7 +14,7 @@ import { runChecks } from "../src/core/checks";
 import { deleteUser } from "../src/core/messages";
 import type { Env } from "../src/core/env";
 import { addMinutes, nowIso } from "../src/core/time";
-import { vendorSigned } from "./helpers";
+import { vendorSigned, withD1ParamLimit } from "./helpers";
 
 const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret", MAIL_SENDER_INFO: "Example Ltd, 1 Main St, Town; +1 555 0100; abuse@example.invalid" };
 const menv = (over: Partial<Env> = {}) => ({ ...env, ...MAIL, ...over }) as Env;
@@ -89,6 +89,12 @@ describe("POST /v1/mail", () => {
     expect((await send(key, { html })).status).toBe(202);
     expect(calls[0]!.body.htmlbody).toBe(`${html}<hr><p style="font-size:12px;color:#666">${MAIL.MAIL_SENDER_INFO}</p>`);
     expect(calls[0]!.body.textbody).toBe(`${mailBody().text}\n\n-- \n${MAIL.MAIL_SENDER_INFO}`);
+  });
+
+  it("deletes the html part with the rest of the content once the vendor accepts", async () => {
+    const key = await mailApp();
+    const { id } = await (await send(key, { html: "<p>Your code: secret-token</p>" })).json<{ id: string }>();
+    expect(await row(id)).toMatchObject({ status: "sent", html_body: null });
   });
 
   it("queues when the vendor is down, keeping the content for the retry", async () => {
@@ -452,6 +458,16 @@ describe("deletion", () => {
     await updateApp(env.DB, "demo", { retention_days: 1 });
     const r = await runScheduled(env as Env, addMinutes(nowIso(), 2 * 24 * 60));
     expect(r.expired_mails).toBe(1);
+  });
+
+  it("deletes more expired mail rows in one run than one statement may bind", async () => {
+    await mailApp();
+    const old = addMinutes(nowIso(), -91 * 24 * 60);
+    const ins = env.DB.prepare("INSERT INTO mails (id,app,kind,label,locale,addr_hash,status,attempts,expires_at,created_at,last_activity_at) VALUES (?,'demo','transactional','l','en','h','sent',1,?,?,?)");
+    await env.DB.batch(Array.from({ length: 150 }, (_, i) => ins.bind(`old-${i}`, old, old, old)));
+    const r = await runScheduled({ ...env, DB: withD1ParamLimit(env.DB) } as Env, nowIso());
+    expect(r.expired_mails).toBe(150);
+    expect((await env.DB.prepare("SELECT COUNT(*) n FROM mails").first<{ n: number }>())!.n).toBe(0);
   });
 });
 

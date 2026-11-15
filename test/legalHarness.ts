@@ -1,39 +1,13 @@
-// The shared harness of the legal-document tests (test/legal*.test.ts): settings, a scripted vendor double,
-// captured Telegram lines, and the request helpers. Importing it registers the doubles for every test of the file.
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { expect, beforeEach, afterEach, vi } from "vitest";
 import worker from "../src/api/index";
-import { createApp, updateApp, rotateSendKey, rotateKey } from "../src/core/apps";
+import { createApp, updateApp, rotateSendKey } from "../src/core/apps";
 import { vendorTransport } from "../src/core/mail/vendor";
-import { addrHash } from "../src/core/mail/hash";
-import { runOutbox, tellFailures } from "../src/core/mail/job";
-import { applyEvent } from "../src/core/mail/webhook";
-import { findByIdempotencyKey, purgeMailHousekeeping, untoldFailures, expireMails } from "../src/core/mail/outbox";
-import { validateMail } from "../src/core/mail/validate";
-import {
-  closeAlert,
-  hashedText,
-  insertLegal,
-  legalConfig,
-  openUndelivered,
-  recordSenderInfo,
-  remindOpenAlerts,
-  tellAlerts,
-  ALERT_BATCH,
-  SEARCH_LIMIT,
-  type LegalDocument,
-} from "../src/core/mail/legal";
-import { runScheduled } from "../src/core/retention";
-import { runChecks } from "../src/core/checks";
-import { deleteUser } from "../src/core/messages";
-import { createSession, readSession } from "../src/core/auth/session";
-import { createAdminToken } from "../src/core/auth/admintoken";
+import { type LegalDocument } from "../src/core/mail/legal";
 import { TelegramNotifier } from "../src/core/notify/telegram";
-import { sha256Hex } from "../src/core/ids";
 import type { Env } from "../src/core/env";
 import { addMinutes, nowIso } from "../src/core/time";
-import { adminRequest, pinAdmin, submission, vendorSigned } from "./helpers";
-import { insertMessage } from "../src/core/messages";
+import { vendorSigned } from "./helpers";
 
 export const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret", MAIL_SENDER_INFO: "Example Ltd, 1 Main St, Town; +1 555 0100; abuse@example.invalid" };
 export const LEGAL = { LEGAL_KEEP_YEARS: "10" };

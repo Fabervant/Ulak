@@ -1,64 +1,35 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import worker from "../src/api/index";
-import { createApp, updateApp, rotateSendKey, rotateKey } from "../src/core/apps";
-import { vendorTransport } from "../src/core/mail/vendor";
 import { addrHash } from "../src/core/mail/hash";
 import { runOutbox, tellFailures } from "../src/core/mail/job";
-import { applyEvent } from "../src/core/mail/webhook";
-import { findByIdempotencyKey, purgeMailHousekeeping, untoldFailures, expireMails } from "../src/core/mail/outbox";
+import { findByIdempotencyKey, purgeMailHousekeeping } from "../src/core/mail/outbox";
 import { validateMail } from "../src/core/mail/validate";
-import {
-  closeAlert,
-  hashedText,
-  insertLegal,
-  legalConfig,
-  openUndelivered,
-  recordSenderInfo,
-  remindOpenAlerts,
-  tellAlerts,
-  ALERT_BATCH,
-  SEARCH_LIMIT,
-  type LegalDocument,
-} from "../src/core/mail/legal";
-import { runScheduled } from "../src/core/retention";
+import { insertLegal, legalConfig, recordSenderInfo } from "../src/core/mail/legal";
 import { runChecks } from "../src/core/checks";
-import { deleteUser } from "../src/core/messages";
-import { createSession, readSession } from "../src/core/auth/session";
-import { createAdminToken } from "../src/core/auth/admintoken";
-import { TelegramNotifier } from "../src/core/notify/telegram";
 import { sha256Hex } from "../src/core/ids";
 import type { Env } from "../src/core/env";
 import { addMinutes, nowIso } from "../src/core/time";
-import { adminRequest, pinAdmin, submission, vendorSigned } from "./helpers";
-import { insertMessage } from "../src/core/messages";
 import {
   ADDRESS,
-  LEGAL,
   MAIL,
   REFERENCE,
   SUBJECT,
   TEXT,
-  TG,
   VERSION,
   alerts,
   call,
   calls,
   copy,
   down,
-  event,
   idOf,
   legalApp,
   legalBody,
   lenv,
   lines,
   mailRow,
-  malformed,
-  refusedAddress,
   replies,
   sendLegal,
-  signedPayloadEvent,
-  telegram,
 } from "./legalHarness";
 
 // ---------------------------------------------------------------------------------------------

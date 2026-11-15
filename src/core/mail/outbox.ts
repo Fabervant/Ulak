@@ -37,11 +37,18 @@ export interface MailRow {
   last_activity_at: string;
 }
 
-export const RECIPIENT_HOURLY_LIMIT = 10;
-export const IDEMPOTENCY_DAYS = 7;
-export const LEASE_MINUTES = 2;
-export const OUTBOX_BATCH = 50;
+const RECIPIENT_HOURLY_LIMIT = 10;
+const IDEMPOTENCY_DAYS = 7;
+const LEASE_MINUTES = 2;
+const OUTBOX_BATCH = 50;
 const HOUR = 60;
+
+/** The start of the idempotency window: a key older than this starts a new mail. */
+const idempotencyStart = (now: string): string => addMinutes(now, -IDEMPOTENCY_DAYS * 24 * HOUR);
+
+/** What a mail loses once the vendor has it or Ulak stops trying it: its lease, its next try, the
+ *  plain address and the content. Every closing write here sets these, so none keeps a body behind. */
+const CLEARED = "lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL";
 
 /** Minutes to wait after the n-th failed attempt: 5, 10, 20, 40, then every hour. */
 export const backoffMinutes = (n: number): number => Math.min(5 * 2 ** Math.max(0, n - 1), HOUR);
@@ -51,7 +58,7 @@ export const backoffMinutes = (n: number): number => Math.min(5 * 2 ** Math.max(
 export async function findByIdempotencyKey(db: D1Database, app: string, kind: string, key: string, now: string): Promise<MailRow | null> {
   return db
     .prepare("SELECT * FROM mails WHERE app=? AND kind=? AND idempotency_key=? AND created_at>?")
-    .bind(app, kind, key, addMinutes(now, -IDEMPOTENCY_DAYS * 24 * HOUR))
+    .bind(app, kind, key, idempotencyStart(now))
     .first<MailRow>();
 }
 
@@ -69,8 +76,9 @@ export async function insertMail(db: D1Database, app: string, m: MailRequest, ad
   // A key older than the idempotency window starts a new mail; it gives up its place in the unique index.
   await db
     .prepare("UPDATE mails SET idempotency_key=NULL WHERE app=? AND kind=? AND idempotency_key=? AND created_at<=?")
-    .bind(app, m.kind, m.idempotency_key,addMinutes(now, -IDEMPOTENCY_DAYS * 24 * HOUR))
+    .bind(app, m.kind, m.idempotency_key, idempotencyStart(now))
     .run();
+  let unique: unknown = null;
   try {
     const { meta } = await db
       .prepare(
@@ -80,18 +88,16 @@ export async function insertMail(db: D1Database, app: string, m: MailRequest, ad
       )
       .bind(id, app, m.kind, m.label, m.locale, addrHash, m.user_ref, m.idempotency_key, m.to, m.subject, m.text, m.html, now, m.expires_at, addMinutes(now, -HOUR), RECIPIENT_HOURLY_LIMIT)
       .run();
-    if (!meta.changes) {
-      // At the ceiling, a call with the key of a mail that just raced in is a repeat, not a new mail.
-      const prior = await findByIdempotencyKey(db, app, m.kind, m.idempotency_key, now);
-      return prior ? { row: prior, created: false } : null;
-    }
+    if (meta.changes) return { row: (await getMail(db, id))!, created: true };
   } catch (e) {
     if (!/UNIQUE/i.test(String(e))) throw e;
-    const prior = await findByIdempotencyKey(db, app, m.kind, m.idempotency_key, now);
-    if (!prior) throw e;
-    return { row: prior, created: false };
+    unique = e;
   }
-  return { row: (await getMail(db, id))!, created: true };
+  // A call with the key of a mail that just raced in is a repeat, not a new mail, at the ceiling too.
+  const prior = await findByIdempotencyKey(db, app, m.kind, m.idempotency_key, now);
+  if (prior) return { row: prior, created: false };
+  if (unique) throw unique;
+  return null;
 }
 
 /** Seconds until the oldest mail in this address's hour leaves the window; at least 1. */
@@ -108,7 +114,7 @@ export async function getMail(db: D1Database, id: string): Promise<MailRow | nul
 /** Takes the mail for one attempt, returning the lease that marks the holder, or null. Only one
  *  caller holds a mail at a time, so the request's first attempt and the timer never send it
  *  together, and a mail past its expiry is never taken. */
-export async function claimMail(db: D1Database, id: string, now: string): Promise<string | null> {
+async function claimMail(db: D1Database, id: string, now: string): Promise<string | null> {
   const lease = addMinutes(now, LEASE_MINUTES);
   const { meta } = await db
     .prepare("UPDATE mails SET lease_until=? WHERE id=? AND status='queued' AND to_addr IS NOT NULL AND expires_at>? AND (lease_until IS NULL OR lease_until<=?)")
@@ -117,7 +123,7 @@ export async function claimMail(db: D1Database, id: string, now: string): Promis
   return meta.changes === 1 ? lease : null;
 }
 
-export type AttemptOutcome = { status: MailStatus; result: VendorResult["kind"] | "not_claimed" };
+type AttemptOutcome = { status: MailStatus; result: VendorResult["kind"] | "not_claimed" };
 
 /** What a legal document's copy and alerts record of an attempt whose write this caller made: the
  *  acceptance is stamped on the copy, a refusal or a malformed mail opens its alert. A write that
@@ -151,14 +157,13 @@ export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow,
   const done = nowIso();
   const attempts = row.attempts + 1;
   const held = "WHERE id=? AND status='queued' AND lease_until=?";
-  const gone = "lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL";
   let write: D1PreparedStatement;
   let status: MailStatus;
   switch (result.kind) {
     case "accepted":
       status = "sent";
       write = db
-        .prepare(`UPDATE mails SET status='sent', attempts=?, sent_at=?, vendor_request_id=?, last_error=NULL, ${gone}, last_activity_at=? ${held}`)
+        .prepare(`UPDATE mails SET status='sent', attempts=?, sent_at=?, vendor_request_id=?, last_error=NULL, ${CLEARED}, last_activity_at=? ${held}`)
         .bind(attempts, done, result.requestId || null, done, row.id, lease);
       break;
     case "vendor_down":
@@ -170,7 +175,7 @@ export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow,
     case "address_refused":
     case "request_bad":
       status = result.kind === "address_refused" ? "refused" : "failed";
-      write = db.prepare(`UPDATE mails SET status=?, attempts=?, last_error=?, ${gone}, last_activity_at=? ${held}`).bind(status, attempts, result.error, done, row.id, lease);
+      write = db.prepare(`UPDATE mails SET status=?, attempts=?, last_error=?, ${CLEARED}, last_activity_at=? ${held}`).bind(status, attempts, result.error, done, row.id, lease);
       break;
   }
   const { meta } = await write!.run();
@@ -193,7 +198,7 @@ export async function giveUpExpired(db: D1Database, now: string): Promise<MailRo
   const changed = new Set(
     (
       await db
-        .prepare(`UPDATE mails SET status='given_up', lease_until=NULL, next_attempt_at=NULL, to_addr=NULL, subject=NULL, text_body=NULL, html_body=NULL, last_activity_at=? WHERE id IN (${placeholders(ids.length)}) AND status='queued' RETURNING id`)
+        .prepare(`UPDATE mails SET status='given_up', ${CLEARED}, last_activity_at=? WHERE id IN (${placeholders(ids.length)}) AND status='queued' RETURNING id`)
         .bind(now, ...ids)
         .all<{ id: string }>()
     ).results.map((r) => r.id),
@@ -243,7 +248,7 @@ export const failureLine = (r: MailRow): string =>
 /** Spent idempotency keys and old attempt records. */
 export async function purgeMailHousekeeping(db: D1Database, now: string): Promise<void> {
   await db.batch([
-    db.prepare("UPDATE mails SET idempotency_key=NULL WHERE idempotency_key IS NOT NULL AND created_at<=?").bind(addMinutes(now, -IDEMPOTENCY_DAYS * 24 * HOUR)),
+    db.prepare("UPDATE mails SET idempotency_key=NULL WHERE idempotency_key IS NOT NULL AND created_at<=?").bind(idempotencyStart(now)),
     db.prepare("DELETE FROM mail_attempts WHERE at<=?").bind(addMinutes(now, -HOUR)),
   ]);
 }
@@ -270,7 +275,7 @@ export async function sendingHealth(db: D1Database, now: string): Promise<"ok" |
   return rows.length === 3 && rows.every((r) => r.ok === 0) ? "down" : "ok";
 }
 
-export interface MailDeletion {
+interface MailDeletion {
   deleted_mails: number;
   /** This person's legal copies, kept by the seller's legal duty, their `user_ref` removed. */
   kept_legal_copies: number;
@@ -293,7 +298,7 @@ export const deleteMailsByAddress = (db: D1Database, app: string, addrHash: stri
 
 export const deleteMailsByUser = (db: D1Database, app: string, user_ref: string): Promise<MailDeletion> => deleteMailsWhere(db, "app=? AND user_ref=?", [app, user_ref]);
 
-export const OUTBOX_STATUSES: MailStatus[] = ["queued", "failed", "given_up", "refused", "bounced", "complained"];
+const OUTBOX_STATUSES: MailStatus[] = ["queued", "failed", "given_up", "refused", "bounced", "complained"];
 
 /** The admin outbox: mails that are waiting or did not arrive, last 30 days, newest first. */
 export async function listOutbox(db: D1Database, now: string, app?: string): Promise<MailRow[]> {
