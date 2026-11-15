@@ -21,6 +21,12 @@ export default defineConfig(async () => {
       maxWorkers: process.env.CI ? undefined : 12,
       // No test asserts on elapsed time, and the bulk ones outlast Vitest's 5 s on a busy machine.
       testTimeout: 30_000,
+      // No test's stub reaches the next test (test/leakDetector.ts names what these cannot undo).
+      unstubGlobals: true,
+      unstubEnvs: true,
+      restoreMocks: true,
+      // ULAK_TEST_ORDER=reverse runs every block's tests last to first (test/reverseOrderRunner.ts).
+      ...(process.env.ULAK_TEST_ORDER === "reverse" ? { runner: "./test/reverseOrderRunner.ts" } : {}),
     },
   };
 });
