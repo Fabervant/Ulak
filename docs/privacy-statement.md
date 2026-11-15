@@ -81,9 +81,9 @@ of each mail for 60 days; the mail's text is not stored there. This service cann
 If you buy in an app that sends its after-sale documents (the pre-contract information and the
 contract) through this service, the exact mail sent to you (its subject, text, your address, the
 document version and the order number) and {{MAIL_VENDOR}}'s report that your mail server accepted
-it are kept for 10 years from the end of the year of your purchase, because the law requires the
-seller to keep copies of the documents it sent. They are kept even if you ask for deletion earlier,
-and deleted automatically at the end of that period. The operator can download a copy to resend it
+it are kept for 10 years from the end of the calendar year in which it was sent to you, as the
+Turkish Commercial Code requires (art. 82), and then deleted automatically. They are kept even if
+you ask for deletion earlier. The operator can download a copy to resend it
 to you; it is never shown to anyone else.
 
 Why: a legal duty of the seller.
@@ -98,7 +98,8 @@ your text, like a support message, so the operator can read and answer it by mai
 rules; other attachments are dropped. Your reply is shown in the app's support thread only if it
 comes from the address the mail was sent to; otherwise only the operator sees it. If you write to
 withdraw from a purchase, the arrival time of that message and the operator's handling of it are
-kept for 10 years from the end of the year of your purchase, as in the section above.
+kept for 10 years from the end of the calendar year in which it arrived, as the Turkish Commercial
+Code requires (art. 82).
 
 Why: to answer you (the contract with you); for a withdrawal, a legal duty of the seller.
 

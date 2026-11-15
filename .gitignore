@@ -27,4 +27,3 @@ memory/
 tmp/
 
 # The operator's work ledger, read by local tooling; it names other projects, so it stays out of this public repository
-docs/work_ledger.md

@@ -1,5 +1,7 @@
 # Ulak
 
+You own this codebase and are in charge of all of it: the product is yours to keep free of repeated code, to improve continuously, and to think up and suggest new features for.
+
 Self-hostable support-message service: apps POST messages, the operator is pinged on Telegram,
 replies travel back by polling. Spec: `docs/spec.md`. Plan: `docs/superpowers/plans/`.
 
