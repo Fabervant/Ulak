@@ -1,5 +1,28 @@
 # Completed tasks
 
+## Session 29 — 2026-11-15
+
+- **[K13] done:** rules review step 5, tests (`bfafa3e`, `73ca1ef`; `docs/rules-review/2026-11-15-step-5-tests.md`).
+  548 tests 58.7 s -> 547 in 21.5 s locally (12 workers; 8/16/24 measured, 12 and 16 within noise); CI test step
+  12 s -> 17 s, inside the earlier 12-20 s spread. `test/legal.test.ts` (45.6 s alone) split by task block into four
+  files over `test/legalHarness.ts`. Every test classified by a fresh reader: broken 0, duplicate 1 deleted, internals
+  10 (5 deleted, 4 rewritten at the boundary and each shown red on its break, 1 kept: its replacement would call the
+  real Telegram host), dead 0. A second fresh reader: no covered behaviour lost (two residuals named in the file).
+  Report letter to operations (`2026-11-15-ulak-s29-rules-review-step-5-report.md`).
+- **[K14] done:** refactor round 1 on `src/core/mail/outbox.ts` (`787c2e4`, `105894b`), closed by the mandate tool.
+  D1 fixed: 150 expired mails pin `expireMails`' slice loop (red when it stops after one slice); the verifier's green
+  break (html_body kept after sending) pinned too. One idempotency window, one cleared-column list, one repeat lookup
+  in `insertMail`; eight exports made local. Seven observations answered where the code is (O31 planted in todo:
+  `webhook.ts`'s copy of the column list waits for its own round). 549 passed.
+- **Drift review (maintenance session):** report `docs/drift-reviews/review-2026-11-15-up-to-29.md`; one finding, a
+  project name in `completed_tasks.md` missed by the name check: hash list extended (red first), line reworded; old git
+  history keeps it (rewriting it is a force push, recommended against). Rule-file audit approved by him (S29 pop-up
+  "Approve as proposed (Recommended)"): two duplicate sentences trimmed from notes. Feature review: 0 findings.
+- **Letters:** operations S326 owner-tags check run: CLAUDE.md's scope line now quotes his S11 words, two plan picks
+  relabelled; archived. Payments service S8 notices ready: on his pick "I create app, you key (Recommended)" Ulak made
+  its app live (no mail, images or origins); he made the notice key, ticked owner notices and shared the key
+  (read back live: on, key set); answered by letter of 2026-11-15; archived.
+
 ## Session 28 — 2026-11-15
 
 - **[K12] done:** rules review step 4 (`7229525`). Stale copies of C7, D1, D2, M6, M15, M18, M10-M12 searched in tracked
