@@ -26,7 +26,7 @@ export async function runScheduled(env: Env, now: string = nowIso()): Promise<Sc
   const expired = await expireMessages(env, now);
   const expired_mails = await expireMails(env.DB, now);
   const legal = legalConfigState(env);
-  const purged_legal_copies = legal.state === "set" ? await purgeLegal(env.DB, legal.cfg.keepDays, now) : 0;
+  const purged_legal_copies = legal.state === "set" ? await purgeLegal(env.DB, legal.cfg.keepYears, now) : 0;
   const legal_reminder = await remindOpenAlerts(env, now);
   const purged_images = await purgeUnclaimedImages(env, now);
   const purged_notices = await purgeNotices(env.DB, now);

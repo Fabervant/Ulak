@@ -11,26 +11,29 @@ import { SENDER_SEPARATOR } from "./vendor";
 // Settings. The legal reads change these numbers, never the code.
 
 interface LegalConfig {
-  /** The copy's keeping period in days, counted from its `keep_from`. */
-  keepDays: number;
+  /** The copy's keeping period in whole years, counted from the end of the calendar year it was
+   *  sent in (TTK art 82(5)-(6)). */
+  keepYears: number;
   /** How long Ulak keeps trying to send a legal document. */
   expiryHours: number;
 }
 
 export const DEFAULT_LEGAL_EXPIRY_HOURS = 24;
-/** No legal keeping duty is shorter than a year; a smaller value is a typo (109 for 1096) that would
- *  delete copies within the hour, so it is a bad setting, not a period. */
-const MIN_LEGAL_KEEP_DAYS = 365;
+/** A keeping period over a century is a typo (100 typed for 10), not a period. */
+const MAX_LEGAL_KEEP_YEARS = 99;
 const MAX_LEGAL_EXPIRY_HOURS = 72;
 
 class LegalConfigError extends Error {}
 
 const wholeNumber = (v: string): number | null => (/^\d{1,6}$/.test(v.trim()) ? Number(v.trim()) : null);
 
-/** The legal settings; null while `LEGAL_KEEP_DAYS` is unset, so no copy is ever kept under a
+/** The legal settings; null while `LEGAL_KEEP_YEARS` is unset, so no copy is ever kept under a
  *  guessed period. Any value outside its range throws: a bad setting never looks like a good one. */
 export function legalConfig(env: Env): LegalConfig | null {
-  const keepRaw = env.LEGAL_KEEP_DAYS?.trim() ?? "";
+  // The old day count measured from the sale; left set beside or instead of the years, it would
+  // read as a period it no longer is, so it is a bad setting until removed.
+  if (env.LEGAL_KEEP_DAYS !== undefined) throw new LegalConfigError("LEGAL_KEEP_DAYS is replaced by LEGAL_KEEP_YEARS; remove it");
+  const keepRaw = env.LEGAL_KEEP_YEARS?.trim() ?? "";
   const expRaw = env.LEGAL_EXPIRY_HOURS?.trim() ?? "";
   let expiryHours = DEFAULT_LEGAL_EXPIRY_HOURS;
   if (expRaw) {
@@ -39,9 +42,9 @@ export function legalConfig(env: Env): LegalConfig | null {
     expiryHours = n;
   }
   if (!keepRaw) return null;
-  const keepDays = wholeNumber(keepRaw);
-  if (keepDays === null || keepDays < MIN_LEGAL_KEEP_DAYS) throw new LegalConfigError(`LEGAL_KEEP_DAYS must be a whole number of at least ${MIN_LEGAL_KEEP_DAYS}`);
-  return { keepDays, expiryHours };
+  const keepYears = wholeNumber(keepRaw);
+  if (keepYears === null || keepYears < 1 || keepYears > MAX_LEGAL_KEEP_YEARS) throw new LegalConfigError(`LEGAL_KEEP_YEARS must be a whole number from 1 to ${MAX_LEGAL_KEEP_YEARS}`);
+  return { keepYears, expiryHours };
 }
 
 type LegalConfigState = { state: "set"; cfg: LegalConfig } | { state: "unset" } | { state: "bad"; message: string };
@@ -450,13 +453,6 @@ export async function searchCopies(db: D1Database, reference: string, app?: stri
   return (await db.prepare(sql).bind(...binds).all<CopyView>()).results;
 }
 
-/** How long a copy may wait for its subscription's end before the operator is shown it to ask the app. */
-const NO_END_DAYS = 400;
-
-export async function countCopiesWithoutEnd(db: D1Database, now: string): Promise<number> {
-  return (await db.prepare("SELECT COUNT(*) n FROM legal_documents WHERE keep_from IS NULL AND created_at<?").bind(addMinutes(now, -NO_END_DAYS * 24 * 60)).first<{ n: number }>())?.n ?? 0;
-}
-
 /** The download: the copy's evidence, then the text exactly as sent, closed by the sender block that
  *  went under it, as the mail showed it. */
 export function copyText(d: LegalDocument): string {
@@ -483,8 +479,9 @@ export function copyText(d: LegalDocument): string {
 
 const REF = /^[A-Za-z0-9._:/-]{1,64}$/;
 
-/** The subscription ended: its copies' keeping period starts at `ended_at`. Only copies with no
- *  start yet are touched, so a renewal's documents share the end and a repeat changes nothing. */
+/** The subscription ended: recorded on its copies with no end yet, so a renewal's documents share it
+ *  and a repeat changes nothing. Kept for the clients that call it; it no longer sets when a copy is
+ *  deleted (that counts from the copy's own sending year, `purgeLegal`). */
 export async function reportEnd(db: D1Database, app: string, raw: unknown, now: string): Promise<number> {
   const b = (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   if (typeof b.reference !== "string" || !REF.test(b.reference)) throw invalid("reference", "reference must match [A-Za-z0-9._:/-]{1,64}");
@@ -498,10 +495,22 @@ export async function reportEnd(db: D1Database, app: string, raw: unknown, now: 
   return (await db.prepare("UPDATE legal_documents SET keep_from=? WHERE app=? AND reference=? AND keep_from IS NULL").bind(ended, app, b.reference).run()).meta.changes;
 }
 
+/** The calendar year a legal copy belongs to is Türkiye's (UTC+3 all year since 2016). */
+const LEGAL_YEAR_UTC_OFFSET_MS = 3 * 60 * 60 * 1000;
+
+/** The first instant of the legal calendar year `years` before the one `now` falls in. A copy sent
+ *  before it was sent in a year that ended `years` or more years ago, so its period has passed. */
+export function keepCutoff(now: string, years: number): string {
+  const year = new Date(Date.parse(now) + LEGAL_YEAR_UTC_OFFSET_MS).getUTCFullYear();
+  return new Date(Date.UTC(year - years, 0, 1) - LEGAL_YEAR_UTC_OFFSET_MS).toISOString();
+}
+
 /** Deletes the copies whose keeping period, as set at this run, has passed, a slice at a time; their
- *  alerts go with them, open or not. A copy with no `keep_from` is never deleted. */
-export async function purgeLegal(db: D1Database, keepDays: number, now: string): Promise<number> {
-  const due = db.prepare(`SELECT mail_id FROM legal_documents WHERE keep_from IS NOT NULL AND keep_from<? LIMIT ${D1_MAX_PARAMS}`).bind(addMinutes(now, -keepDays * 24 * 60));
+ *  alerts go with them, open or not. Each copy is kept to the end of the calendar year it was sent in
+ *  plus the years set (TTK art 82(5)-(6)); a copy the mail service never accepted counts from when
+ *  Ulak accepted it. */
+export async function purgeLegal(db: D1Database, keepYears: number, now: string): Promise<number> {
+  const due = db.prepare(`SELECT mail_id FROM legal_documents WHERE COALESCE(sent_at, created_at)<? LIMIT ${D1_MAX_PARAMS}`).bind(keepCutoff(now, keepYears));
   let purged = 0;
   for (;;) {
     const ids = (await due.all<{ mail_id: string }>()).results.map((r) => r.mail_id);

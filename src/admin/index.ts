@@ -15,7 +15,7 @@ import { bootstrapAdmin, revokeSessions } from "../core/auth/admins";
 import { listAdmin, countByAppAndStatus, getMessage, setStatus, deleteUser } from "../core/messages";
 import { addReply, listReplies } from "../core/replies";
 import { listApps, getApp, createApp, updateApp, rotateKey, rotateNoticeKey, rotateSendKey } from "../core/apps";
-import { closeAlert, copyText, countCopiesWithoutEnd, getLegal, listOpenAlerts, recordedLegalConfig, searchCopies } from "../core/mail/legal";
+import { closeAlert, copyText, getLegal, listOpenAlerts, recordedLegalConfig, searchCopies } from "../core/mail/legal";
 import { legalView } from "./views/legal";
 import { html } from "hono/html";
 import { listOutbox } from "../core/mail/outbox";
@@ -199,7 +199,7 @@ app.post("/apps/:id", async (c) => {
   const kinds = [...(f.mail_transactional === "on" ? ["transactional"] : []), ...(f.mail_legal === "on" ? ["legal_document"] : [])];
   // A legal document needs the API Worker's keeping period; the admin Worker reads what the timer recorded of it.
   if (kinds.includes("legal_document") && !cur?.mail_kinds.includes("legal_document") && (await recordedLegalConfig(c.env.DB)) !== "set") {
-    return c.text("legal documents need LEGAL_KEEP_DAYS set on the API Worker (docs/self-hosting.md); the timer has not found it set", 400);
+    return c.text("legal documents need LEGAL_KEEP_YEARS set on the API Worker (docs/self-hosting.md); the timer has not found it set", 400);
   }
   await updateApp(c.env.DB, id, {
     retention_days: Number(f.retention_days),
@@ -234,9 +234,9 @@ app.get("/outbox", async (c) => {
 app.get("/legal", async (c) => {
   const reference = (c.req.query("reference") ?? "").trim();
   const filterApp = c.req.query("app") || undefined;
-  const [alerts, apps, copiesWithoutEnd] = await Promise.all([listOpenAlerts(c.env.DB), listApps(c.env.DB), countCopiesWithoutEnd(c.env.DB, nowIso())]);
+  const [alerts, apps] = await Promise.all([listOpenAlerts(c.env.DB), listApps(c.env.DB)]);
   const search = reference ? { reference, app: filterApp, rows: await searchCopies(c.env.DB, reference, filterApp) } : undefined;
-  return page(c, "Legal", (csrf) => legalView({ alerts, search, apps: apps.map((a) => a.id), copiesWithoutEnd }, csrf));
+  return page(c, "Legal", (csrf) => legalView({ alerts, search, apps: apps.map((a) => a.id) }, csrf));
 });
 
 app.post("/legal/alerts/:id/close", async (c) => {

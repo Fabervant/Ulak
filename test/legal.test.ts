@@ -36,7 +36,7 @@ import { adminRequest, pinAdmin, submission, vendorSigned } from "./helpers";
 import { insertMessage } from "../src/core/messages";
 
 const MAIL = { MAIL_API_URL: "https://mail.example.invalid/v1.1/email", MAIL_FROM_DOMAIN: "example.invalid", MAIL_API_KEY: "vendor-key", MAIL_WEBHOOK_KEY: "hook-key", MAIL_HASH_SECRET: "hash-secret", MAIL_SENDER_INFO: "Example Ltd, 1 Main St, Town; +1 555 0100; abuse@example.invalid" };
-const LEGAL = { LEGAL_KEEP_DAYS: "1096" };
+const LEGAL = { LEGAL_KEEP_YEARS: "10" };
 const TG = { NOTIFIER: "telegram", TELEGRAM_BOT_TOKEN: "t", TELEGRAM_CHAT_ID: "c" };
 const lenv = (over: Partial<Env> = {}) => ({ ...env, ...MAIL, ...LEGAL, ...TG, ...over }) as Env;
 
@@ -186,34 +186,35 @@ describe("task 2: settings", () => {
   const cfg = (over: Record<string, string | undefined>) => legalConfig({ ...env, ...over } as Env);
   it("unset keeping period: null; set: the numbers; expiry 24 by default", () => {
     expect(cfg({})).toBeNull();
-    expect(cfg({ LEGAL_KEEP_DAYS: "  " })).toBeNull();
-    expect(cfg({ LEGAL_KEEP_DAYS: "1096" })).toEqual({ keepDays: 1096, expiryHours: 24 });
-    expect(cfg({ LEGAL_KEEP_DAYS: "3650", LEGAL_EXPIRY_HOURS: "72" })).toEqual({ keepDays: 3650, expiryHours: 72 });
-    expect(cfg({ LEGAL_KEEP_DAYS: "365", LEGAL_EXPIRY_HOURS: "1" })).toEqual({ keepDays: 365, expiryHours: 1 });
+    expect(cfg({ LEGAL_KEEP_YEARS: "  " })).toBeNull();
+    expect(cfg({ LEGAL_KEEP_YEARS: "10" })).toEqual({ keepYears: 10, expiryHours: 24 });
+    expect(cfg({ LEGAL_KEEP_YEARS: "99", LEGAL_EXPIRY_HOURS: "72" })).toEqual({ keepYears: 99, expiryHours: 72 });
+    expect(cfg({ LEGAL_KEEP_YEARS: "1", LEGAL_EXPIRY_HOURS: "1" })).toEqual({ keepYears: 1, expiryHours: 1 });
   });
   for (const [name, over] of [
-    ["keep 0", { LEGAL_KEEP_DAYS: "0" }],
-    ["keep under a year (109 typed for 1096)", { LEGAL_KEEP_DAYS: "109" }],
-    ["keep 364", { LEGAL_KEEP_DAYS: "364" }],
-    ["keep negative", { LEGAL_KEEP_DAYS: "-5" }],
-    ["keep fraction", { LEGAL_KEEP_DAYS: "1.5" }],
-    ["keep words", { LEGAL_KEEP_DAYS: "3 years" }],
-    ["expiry 0", { LEGAL_KEEP_DAYS: "1096", LEGAL_EXPIRY_HOURS: "0" }],
-    ["expiry 73", { LEGAL_KEEP_DAYS: "1096", LEGAL_EXPIRY_HOURS: "73" }],
-    ["expiry words", { LEGAL_KEEP_DAYS: "1096", LEGAL_EXPIRY_HOURS: "a day" }],
+    ["keep 0", { LEGAL_KEEP_YEARS: "0" }],
+    ["keep a century (100 typed for 10)", { LEGAL_KEEP_YEARS: "100" }],
+    ["keep negative", { LEGAL_KEEP_YEARS: "-5" }],
+    ["keep fraction", { LEGAL_KEEP_YEARS: "1.5" }],
+    ["keep words", { LEGAL_KEEP_YEARS: "ten" }],
+    ["the former day count, alone", { LEGAL_KEEP_DAYS: "1096" }],
+    ["the former day count beside the years", { LEGAL_KEEP_DAYS: "1096", LEGAL_KEEP_YEARS: "10" }],
+    ["expiry 0", { LEGAL_KEEP_YEARS: "10", LEGAL_EXPIRY_HOURS: "0" }],
+    ["expiry 73", { LEGAL_KEEP_YEARS: "10", LEGAL_EXPIRY_HOURS: "73" }],
+    ["expiry words", { LEGAL_KEEP_YEARS: "10", LEGAL_EXPIRY_HOURS: "a day" }],
     ["expiry bad while keep unset", { LEGAL_EXPIRY_HOURS: "99" }],
   ] as const) {
     it(`bad setting throws: ${name}`, () => expect(() => cfg(over)).toThrow(/LEGAL_/));
   }
 
   it("the timer records the state; the health check goes red on a bad setting and green again once fixed", async () => {
-    await runOutbox(lenv({ LEGAL_KEEP_DAYS: "0" }));
+    await runOutbox(lenv({ LEGAL_KEEP_YEARS: "0" }));
     let r = await runChecks(env.DB, addMinutes(nowIso(), 1));
     expect(r).toMatchObject({ ok: false, legal_config_bad: 1 });
     await runOutbox(lenv());
     r = await runChecks(env.DB, addMinutes(nowIso(), 1));
     expect(r).toMatchObject({ ok: true, legal_config_bad: 0 });
-    await runOutbox(lenv({ LEGAL_KEEP_DAYS: undefined }));
+    await runOutbox(lenv({ LEGAL_KEEP_YEARS: undefined }));
     expect((await env.DB.prepare("SELECT value FROM service_state WHERE key='legal_config'").first<{ value: string }>())!.value).toBe("unset");
     expect((await runChecks(env.DB, addMinutes(nowIso(), 1))).ok).toBe(true);
   });
@@ -228,10 +229,10 @@ describe("task 2: settings", () => {
 
   it("the legal path refuses while the keeping period is unset, and answers 500 when it is bad", async () => {
     const key = await legalApp();
-    const unset = await sendLegal(key, {}, lenv({ LEGAL_KEEP_DAYS: undefined }));
+    const unset = await sendLegal(key, {}, lenv({ LEGAL_KEEP_YEARS: undefined }));
     expect(unset.status).toBe(422);
     expect(await unset.json()).toMatchObject({ error: "kind_not_allowed", retryable: false });
-    const bad = await sendLegal(key, {}, lenv({ LEGAL_KEEP_DAYS: "forever" }));
+    const bad = await sendLegal(key, {}, lenv({ LEGAL_KEEP_YEARS: "forever" }));
     expect(bad.status).toBe(500);
     expect(await bad.json()).toMatchObject({ error: "legal_config_bad" });
     expect(calls).toHaveLength(0);
@@ -769,8 +770,8 @@ describe("task 6: alerts", () => {
     await event(id, "hardbounce");
     await tellAlerts(lenv());
     await remindOpenAlerts(lenv(), "2026-12-01T00:00:00.000Z");
-    await runOutbox(lenv({ LEGAL_KEEP_DAYS: "bad" }));
-    await sendLegal(key, {}, lenv({ LEGAL_KEEP_DAYS: "bad" }));
+    await runOutbox(lenv({ LEGAL_KEEP_YEARS: "bad" }));
+    await sendLegal(key, {}, lenv({ LEGAL_KEEP_YEARS: "bad" }));
     expect(lines.length).toBeGreaterThanOrEqual(4);
     for (const text of [...lines, ...logs]) for (const secret of [ADDRESS, REFERENCE, SUBJECT, VERSION, "buyer"]) expect(text).not.toContain(secret);
   });
@@ -903,29 +904,45 @@ describe("task 8: deletion and keeping", () => {
     expect((await call("/v1/mail/legal/end", null, { reference: REFERENCE, ended_at: nowIso() })).status).toBe(401);
   });
 
-  it("the hourly job deletes copies by the setting at run time, with their alerts; a copy with no end is kept", async () => {
+  it("the hourly job deletes copies by the setting at run time, with their alerts; a subscription's copy counts from its own year", async () => {
     const key = await legalApp();
     replies.push(refusedAddress);
     const oneOff = await idOf(await sendLegal(key));
     const noEnd = await idOf(await sendLegal(key, { document: { version: VERSION, reference: "SUB-1", sale: "subscription" } }));
     expect(await alerts(oneOff)).toHaveLength(1);
     const in1100Days = addMinutes(nowIso(), 1100 * 24 * 60);
-    expect((await runScheduled(lenv({ LEGAL_KEEP_DAYS: "3650" }), in1100Days)).purged_legal_copies).toBe(0);
+    expect((await runScheduled(lenv(), in1100Days)).purged_legal_copies).toBe(0);
     expect(await copy(oneOff)).not.toBeNull();
-    expect((await runScheduled(lenv({ LEGAL_KEEP_DAYS: undefined }), in1100Days)).purged_legal_copies).toBe(0);
-    expect((await runScheduled(lenv({ LEGAL_KEEP_DAYS: "bad" }), in1100Days)).purged_legal_copies).toBe(0);
-    expect((await runScheduled(lenv(), in1100Days)).purged_legal_copies).toBe(1);
+    expect((await runScheduled(lenv({ LEGAL_KEEP_YEARS: undefined }), in1100Days)).purged_legal_copies).toBe(0);
+    expect((await runScheduled(lenv({ LEGAL_KEEP_YEARS: "bad" }), in1100Days)).purged_legal_copies).toBe(0);
+    expect((await runScheduled(lenv({ LEGAL_KEEP_YEARS: "1" }), in1100Days)).purged_legal_copies).toBe(2);
     expect(await copy(oneOff)).toBeNull();
     expect(await alerts(oneOff)).toEqual([]); // the open alert went with it
-    expect((await runScheduled(lenv(), addMinutes(nowIso(), 20 * 365 * 24 * 60))).purged_legal_copies).toBe(0);
-    expect(await copy(noEnd)).not.toBeNull();
+    expect(await copy(noEnd)).toBeNull(); // no reported end holds a copy past its own period
+  });
+
+  it("a copy is kept to the end of its sending calendar year in Türkiye plus the years set (TTK art 82)", async () => {
+    const put = (id: string, sentAt: string) =>
+      env.DB.prepare(
+        `INSERT INTO legal_documents (mail_id,app,reference,version,idempotency_key,label,locale,to_addr,subject,text_body,text_sha256,addr_hash,created_at,keep_from,sent_at)
+         VALUES (?1,'shop','R','v',?1,'l','en','a@example.org','s','t','h','h',?2,?2,?2)`,
+      ).bind(id, sentAt).run();
+    await put("sent-31-dec", "2026-12-31T20:59:00.000Z"); // 23:59 on 31 Dec 2026 in Türkiye (UTC+3)
+    await put("sent-1-jan", "2026-12-31T21:00:00.000Z"); // 00:00 on 1 Jan 2027 in Türkiye
+    const purged = async (at: string) => (await runScheduled(lenv(), at)).purged_legal_copies;
+    expect(await purged("2036-12-31T20:59:59.999Z")).toBe(0); // the last moment of 2036 in Türkiye: both kept
+    expect(await purged("2036-12-31T21:00:00.000Z")).toBe(1); // 2037 begins: the 2026 copy goes
+    expect(await copy("sent-31-dec")).toBeNull();
+    expect(await copy("sent-1-jan")).not.toBeNull();
+    expect(await purged("2037-12-31T20:59:59.999Z")).toBe(0);
+    expect(await purged("2037-12-31T21:00:00.000Z")).toBe(1); // 2038 begins: the 2027 copy goes
   });
 
   it("purging more copies than one statement may bind goes in slices", async () => {
     await env.DB.prepare(
       `WITH RECURSIVE k(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM k WHERE i<230)
        INSERT INTO legal_documents (mail_id,app,reference,version,idempotency_key,label,locale,to_addr,subject,text_body,text_sha256,addr_hash,created_at,keep_from)
-       SELECT printf('c-%04d',i),'shop','R','v',printf('k-%04d',i),'l','en','a@example.org','s','t','h','h','2020-01-01T00:00:00.000Z','2020-01-01T00:00:00.000Z' FROM k`,
+       SELECT printf('c-%04d',i),'shop','R','v',printf('k-%04d',i),'l','en','a@example.org','s','t','h','h','2010-01-01T00:00:00.000Z','2010-01-01T00:00:00.000Z' FROM k`,
     ).run();
     const { withD1ParamLimit } = await import("./helpers");
     expect((await runScheduled({ ...lenv(), DB: withD1ParamLimit(env.DB) })).purged_legal_copies).toBe(230);
@@ -1030,24 +1047,19 @@ describe("task 9: the admin panel", () => {
     expect((await get("/legal/nope/copy")).status).toBe(404);
   });
 
-  it("copies waiting over 400 days for their end are counted for the operator", async () => {
-    await env.DB.prepare("INSERT INTO legal_documents (mail_id,app,reference,version,idempotency_key,label,locale,to_addr,subject,text_body,text_sha256,addr_hash,created_at) VALUES ('old','shop','S','v','k','l','en','a@example.org','s','t','h','h','2020-01-01T00:00:00.000Z')").run();
-    expect(await (await get("/legal")).text()).toContain("1 subscription copy has waited over 400 days");
-  });
-
   it("the legal tick is refused until the timer found the keeping period set, and is kept on save", async () => {
     await legalApp();
     await createApp(env.DB, "plain");
     const fields = { retention_days: "90", mail_from_name: "Plain", mail_labels: "receipt", allowed_origins: "" };
     const refused = await post("/apps/plain", { ...fields, mail_transactional: "on", mail_legal: "on" });
     expect(refused.status).toBe(400);
-    expect(await refused.text()).toMatch(/LEGAL_KEEP_DAYS/);
+    expect(await refused.text()).toMatch(/LEGAL_KEEP_YEARS/);
     await runOutbox(lenv());
     expect((await post("/apps/plain", { ...fields, mail_transactional: "on", mail_legal: "on" })).status).toBe(303);
     const kinds = async (id: string) => JSON.parse((await env.DB.prepare("SELECT mail_kinds FROM apps WHERE id=?").bind(id).first<{ mail_kinds: string }>())!.mail_kinds);
     expect(await kinds("plain")).toEqual(["transactional", "legal_document"]);
     // An app that already sends legal documents keeps the tick on any later save, even with the setting gone.
-    await runOutbox(lenv({ LEGAL_KEEP_DAYS: undefined }));
+    await runOutbox(lenv({ LEGAL_KEEP_YEARS: undefined }));
     expect((await post("/apps/shop", { ...fields, mail_transactional: "on", mail_legal: "on" })).status).toBe(303);
     expect(await kinds("shop")).toEqual(["transactional", "legal_document"]);
     expect((await post("/apps/shop", { ...fields, mail_transactional: "on" })).status).toBe(303);

@@ -8,7 +8,6 @@ export interface LegalPage {
   alerts: OpenAlertView[];
   search?: { reference: string; app?: string; rows: CopyView[] };
   apps: string[];
-  copiesWithoutEnd: number;
 }
 
 /** Legal documents. One main action, closing an open alert; the search is the rest of the page.
@@ -38,7 +37,6 @@ export function legalView(p: LegalPage, csrf: string) {
             )}
           </table>`
       : html`<p>No open legal alerts.</p>`}
-    ${p.copiesWithoutEnd ? html`<p class="warn">${p.copiesWithoutEnd} subscription cop${p.copiesWithoutEnd === 1 ? "y has" : "ies have"} waited over 400 days for the subscription's end; ask the app.</p>` : ""}
     <form method="get" action="/legal">
       <input name="reference" required maxlength="64" value="${p.search?.reference ?? ""}" placeholder="search by order reference" />
       <select name="app" class="narrow">

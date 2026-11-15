@@ -236,15 +236,16 @@ SHA-256 of the text, and the sender block that went under it) for a keeping peri
 
 | Name | Value |
 |---|---|
-| `LEGAL_KEEP_DAYS` | the keeping period in days, counted from the sale (one-off) or the subscription's end; for example `1096` for three years; at least `365`, so a typo is refused rather than deleting copies. Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period |
+| `LEGAL_KEEP_YEARS` | the keeping period in whole years, 1 to 99, counted per copy from the end of the calendar year it was sent in (Türkiye's calendar, UTC+3); for example `10` for ten years (Turkish Commercial Code art 82). Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period. The former `LEGAL_KEEP_DAYS` is refused as a bad setting until it is removed |
 | `LEGAL_EXPIRY_HOURS` | optional: how long Ulak keeps trying to send one, 1 to 72; 24 when unset |
 
 A value outside its range makes legal calls answer `500 legal_config_bad` and turns the result check
 red within five minutes. The period is applied at each hourly run, so changing it changes every
-copy's period at once; a copy whose subscription end was never reported is never deleted.
+copy's period at once. A copy is deleted at the first hourly run after its period ends, whether or not its
+subscription's end was reported.
 
 Then, per app, on **Apps**: the *sends legal documents* tick (refused until the five-minute timer has
-seen `LEGAL_KEEP_DAYS` set) and the app's label for the documents.
+seen `LEGAL_KEEP_YEARS` set) and the app's label for the documents.
 
 **Legal** in the admin panel lists the open alerts first, each with a form to close it with a reason
 (and, when the app sent a corrected copy that was delivered, that copy's mail id); then a search by

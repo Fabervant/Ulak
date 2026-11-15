@@ -287,7 +287,7 @@ The call is `POST /v1/mail` with `"kind": "legal_document"` and one more field:
 |---|---|
 | `document.version` | the document version the buyer accepted; `[A-Za-z0-9._:/-]`, 1 to 64 characters |
 | `document.reference` | your order number, which the operator searches by; the same characters |
-| `document.sale` | `one_off` (the keeping period starts at the sale) or `subscription` (it starts when you report the subscription's end) |
+| `document.sale` | `one_off` or `subscription`; recorded with the copy. It no longer changes the keeping period: each copy is kept for the operator's period from the end of the calendar year it was sent in |
 | `text` | plain text only: `html` is refused (`422 bad_html`) |
 | `expires_at` | at most 24 hours ahead unless the operator set another window (at most 72) |
 | `idempotency_key` | the sale's id. For a legal document it never expires while the copy is kept: a repeat a year later still sends nothing |
@@ -317,8 +317,8 @@ answer comes before the mail is sent, so it is fast; any other answer (`400`, `4
   with the same key. An accepted one sends nothing; one your records show was never accepted is sent,
   and you ping the owner that it was missed. A sale with no linked acceptance is never called; list it
   in the owner ping as an alert. If the job has not completed a run in 36 hours, ping the owner.
-- **The subscription's end:** call `POST /v1/mail/legal/end` when a subscription ends (and report the
-  ends your daily reconciliation finds, so a missed call is made up the next day).
+- **The subscription's end:** `POST /v1/mail/legal/end` is still accepted, but no longer needed: it
+  does not change when a copy is deleted.
 
 ### `POST /v1/mail/legal/end`
 
@@ -326,10 +326,10 @@ answer comes before the mail is sent, so it is fast; any other answer (`400`, `4
 {"reference": "ORD-77", "ended_at": "2026-12-01T00:00:00Z"}
 ```
 
-With the send key, from your server. Sets the keeping period's start of every legal document of
-your app with that reference that has none yet, so a subscription's renewals share its end; a repeat
-changes nothing. `ended_at` is ISO 8601 and not in the future. Answers `{"updated": n}`. A copy whose
-end is never reported is kept, never deleted early; the operator sees such copies after 400 days.
+With the send key, from your server. Records the subscription's end on every legal document of your
+app with that reference that has none yet; a repeat changes nothing. `ended_at` is ISO 8601 and not
+in the future. Answers `{"updated": n}`. It no longer changes when a copy is deleted: each copy is
+kept for the operator's period from the end of the calendar year it was sent in.
 
 ### `GET /v1/mail/status`
 
