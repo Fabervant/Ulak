@@ -174,6 +174,21 @@ Each task: a failing test first, then the code, then `npm test`; one commit each
    tests one forward). Any "no" comes back to the owner before task 2. Answered by operations 2026-11-15: the company
    domain's zone is on the platform, so its mail routing can serve a subdomain (operations turns it on when sent the
    exact records); one app sells today, a second will later; each gets its forward after its own read 10.
+   **Findings on Ulak's side (Session 24, 2026-11-15): yes, with one note.**
+   - Parser: `postal-mime` 4.2.0 (pin it; 4.2.1 was under two weeks old at the check). MIT-0, no dependencies of its
+     own, one maintainer, 14 releases between 7 Oct and 10 Nov 2026 (kept up). Bundled and minified with a minimal
+     mail handler: 91 KB, 29 KB gzipped, far inside a Worker's size limit. It has its own limits (nesting, header
+     bytes, part count, nested messages), so a hostile mail cannot make it run away.
+   - Runs in the Workers runtime: a throwaway test in the Vitest Workers pool (removed after) parsed two real raw
+     mails from a public mailing-list archive: a signed multipart mail (From, Message-ID, Date, 1,147 characters of
+     text, the signature as a non-image attachment with its type and size, both `Received` headers, the
+     authentication results, `Precedence`) and an Outlook mail (3 `Received`); and a Turkish encoded From name and
+     Subject decoded right. Task 4 commits the signed mail as its fixture (public archive, no private person's data).
+   - Note for task 4: a mail with only an HTML part gets no `text` from the parser (it converts HTML to text only
+     inside a mixed message, and does not export its converter), so `src/core/inbound` turns the HTML part into
+     text itself; its output is still only ever shown as text.
+   - Waiting: operations' forward test (copy kept, original From kept, `Received` kept) ; task 2 waits for it, and a
+     "no" there goes to the owner first.
 2. Migration `0009_inbound.sql` and the row types.
 3. Reply and forward addresses: build, sign, verify; `vendorBody`'s `Reply-To` by the app's switch.
 4. MIME parsing to the filing input: sender, text, images, automatic-mail and domain-check flags, arrival time.
