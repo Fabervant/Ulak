@@ -1,5 +1,17 @@
 # Completed tasks
 
+## Session 23 — 2026-11-15
+
+- **[K1] done:** phase 2 plan written (`docs/superpowers/plans/2026-11-15-phase-2-inbound.md`, `5cab936`), put to the owner; his answer
+  S23: "Approve, build now (Recommended)" (agent recommendation, approved S23). Design: Ulak drops denied vendor senders on arrival
+  (forwarded copies only, list in an admin-edited table, counts kept), receipt confirmation to every inbound mail, a reply visible in
+  the person's thread only with a valid token, matching address hash, passing domain check and a `user_ref`; withdrawal clocks kept
+  to the end of their arrival year + 10. Letter to operations `2026-11-15-ulak-s23-phase-2-plan-approved.md` (four task-1 questions).
+- **[K2] done:** legal copies deleted at the end of their sending calendar year (UTC+3) + `LEGAL_KEEP_YEARS` (`1eaabc4`), per
+  operations' S291 TTK art 82 ruling; `LEGAL_KEEP_DAYS` refused as bad until removed; the subscription's end no longer holds a copy
+  and the 400-day warning went. Test with copies sent 31 Dec / 1 Jan red on the old rule, green after; `npm test` 530 passed.
+  Lettered (`2026-11-15-ulak-s23-ttk-82-rule-built.md`); deploy waits on the owner's word.
+
 ## Session 22 — 2026-11-15
 
 Mailbox session; the owner gave the word for the phase 2 plan.
