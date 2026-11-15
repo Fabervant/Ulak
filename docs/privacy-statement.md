@@ -12,7 +12,7 @@ Each app that sends messages here should also name this service as a recipient i
 
 ## What is stored
 
-When you send a support message, or when an app sends a crash report with your consent, the
+When you send a support message, or when an app sends a crash report you chose to send, the
 service stores:
 
 - the text you wrote, and the language of your device;
@@ -35,6 +35,10 @@ analytics.
 Only to read and answer your message. The operator uses an AI assistant, Claude by Anthropic
 (United States), to draft replies; the message text is sent to it for that purpose, and a person
 approves every reply before it is sent.
+
+Legal basis: providing the app you use (the contract with you) and our legitimate interest in
+answering you and fixing errors in our apps (Turkish Personal Data Protection Law, art. 5(2)(c)
+and (f)).
 
 ## For how long
 
@@ -107,6 +111,16 @@ kept for 10 years from the end of the calendar year in which it arrived, as the 
 Code requires (art. 82).
 
 Why: to answer you (the contract with you); for a withdrawal, a legal duty of the seller.
+
+## Your rights
+
+Under article 11 of the Turkish Personal Data Protection Law you may ask us whether your data is
+processed and for information about it; its purpose and whether it is used for that purpose; the
+third parties in Türkiye or abroad it is transferred to; its correction if it is incomplete or
+wrong, and its deletion; that a correction or deletion be passed on to those third parties; you may
+object to a result against you that comes solely from automated analysis, and claim compensation
+for damage from unlawful processing. Write to {{CONTACT}}; we answer free of charge within 30 days
+at the latest.
 
 ## Where
 
