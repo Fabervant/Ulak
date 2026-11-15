@@ -474,6 +474,35 @@ describe("sign-out leaves the browser a stranger", () => {
     expect((outbound.mock.calls[1]![1]!.body as URLSearchParams).get("code_verifier")).toBe(VERIFIER);
   });
 
+  it("signing in returns to the page asked for, not to Messages", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Follows the browser: the page refuses, sends to sign-in, Google sends back to the callback.
+    const signInFrom = async (asked: string) => {
+      const refused = await req(asked, {}, null);
+      expect(refused.status, asked).toBe(302);
+      const login = await req(refused.headers.get("location")!, {}, null);
+      const oauth = login.headers.get("set-cookie")!.split(";")[0]!;
+      const q = new URL(login.headers.get("location")!).searchParams;
+      await googleSignsIn(q.get("nonce")!);
+      return req(`/auth/callback?state=${q.get("state")}&code=c1`, { headers: { cookie: oauth } }, null);
+    };
+    for (const asked of ["/outbox", "/m/abc?x=1"]) {
+      const back = await signInFrom(asked);
+      expect(back.status, asked).toBe(302);
+      expect(back.headers.get("location"), asked).toBe(asked);
+    }
+    // Only a page of this panel: another site, a path the browser reads as one, or a sign-in page lands on Messages.
+    for (const outside of ["//evil.example/x", "/\\evil.example", "https://evil.example/", "/auth/login"]) {
+      const login = await req(`/auth/login?next=${encodeURIComponent(outside)}`, {}, null);
+      const oauth = login.headers.get("set-cookie")!.split(";")[0]!;
+      const q = new URL(login.headers.get("location")!).searchParams;
+      await googleSignsIn(q.get("nonce")!);
+      const back = await req(`/auth/callback?state=${q.get("state")}&code=c1`, { headers: { cookie: oauth } }, null);
+      expect(back.headers.get("location"), outside).toBe("/");
+    }
+    warn.mockRestore();
+  });
+
   it("a Google account that is not an admin is refused with a logged 403 and gets no session", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await googleSignsIn("n1", "sub-2", "b@example.invalid");

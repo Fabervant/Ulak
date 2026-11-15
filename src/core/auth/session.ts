@@ -68,9 +68,28 @@ export function clearSessionCookie(): string {
 export const OAUTH_COOKIE = "ulak_oauth";
 export const OAUTH_TTL_SEC = 600;
 
-export function oauthCookie(state: string, nonce: string, verifier: string): string {
-  return `${OAUTH_COOKIE}=${state}.${nonce}.${verifier}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${OAUTH_TTL_SEC}`;
+/** The page the sign-in started from rides in the state cookie, base64url so its dots and
+ *  equals signs cannot split the cookie's fields. */
+export function oauthCookie(state: string, nonce: string, verifier: string, next = "/"): string {
+  return `${OAUTH_COOKIE}=${state}.${nonce}.${verifier}.${b64u(enc.encode(next))}; HttpOnly; Secure; SameSite=Lax; Path=/auth; Max-Age=${OAUTH_TTL_SEC}`;
 }
+
+/** Reads the state cookie back; a page that is not one of the panel's own becomes "/". */
+export function readOauthCookie(value: string | undefined): { state?: string; nonce?: string; verifier?: string; next: string } {
+  const [state, nonce, verifier, packed] = (value ?? "").split(".");
+  let next = "/";
+  try {
+    if (packed) next = new TextDecoder().decode(unb64u(packed));
+  } catch {
+    next = "/";
+  }
+  return { state, nonce, verifier, next: panelPath(next) };
+}
+
+/** Only a page of this panel: "//host" and "/\host" are read by browsers as another site, and a
+ *  sign-in page would only start the sign-in again. */
+export const panelPath = (path: string | undefined): string =>
+  path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/\\") && !path.startsWith("/auth/") && !/[\u0000-\u001f]/.test(path) ? path : "/";
 
 /** PKCE S256 (RFC 7636): the verifier stays in the state cookie; Google is sent only its hash. */
 export async function newPkce(): Promise<{ verifier: string; challenge: string }> {

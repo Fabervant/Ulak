@@ -16,6 +16,13 @@ export function dropCookies(c: Context) {
   c.header("set-cookie", clearRevealCookie(), { append: true });
 }
 
+/** Sign-in that comes back to the page asked for; a refused form post comes back to Messages. */
+function loginFor(c: Context): string {
+  const url = new URL(c.req.url);
+  const asked = url.pathname + url.search;
+  return c.req.method === "GET" && asked !== "/" ? `/auth/login?next=${encodeURIComponent(asked)}` : "/auth/login";
+}
+
 /** Session cookie -> pinned admin, re-checked on every request. Failures are logged and distinguishable. */
 export function requireAdmin(): MiddlewareHandler<{ Bindings: Env; Variables: AdminVars }> {
   return async (c, next) => {
@@ -24,7 +31,7 @@ export function requireAdmin(): MiddlewareHandler<{ Bindings: Env; Variables: Ad
       // A refused cookie is worth nothing, so the browser drops it: a sign-out after "Sign out
       // everywhere" elsewhere, or any visit after the admin row was removed, leaves no account behind.
       if (getCookie(c, SESSION_COOKIE) !== undefined) dropCookies(c);
-      return status === 401 ? c.redirect("/auth/login", 302) : c.text("forbidden: this account is not an admin of this deployment", 403);
+      return status === 401 ? c.redirect(loginFor(c), 302) : c.text("forbidden: this account is not an admin of this deployment", 403);
     };
     if (!c.env.SESSION_SECRET) return fail("SESSION_SECRET not configured", 403);
     const s = await readSession(c.env.SESSION_SECRET, getCookie(c, SESSION_COOKIE));
