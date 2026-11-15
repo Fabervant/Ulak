@@ -22,7 +22,7 @@
     "pretest": "node scripts/hygiene-manifest.mjs"
   },
   "dependencies": {
-    "hono": "^4.13.0",
+    "hono": "^4.13.16",
     "jose": "^6.2.0"
   },
   "devDependencies": {
