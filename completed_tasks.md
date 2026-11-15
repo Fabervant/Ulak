@@ -8,10 +8,10 @@
   clause). M6's merge target (global legal line) loads every session; M18 stays ASK (his S5 words). Operations S326
   point 1: none found; retention and the TTK/TBK copies both have quiet-clock tests. M22's note corrected (only 14 files
   CRLF, read with `git ls-files --eol`). Scenarios for C7 and M15 lettered to operations
-  (`letters/FabervantOps/2026-11-15-ulak-s26-rules-review-step-2-scenarios.md`).
+  (letter `2026-11-15-ulak-s26-rules-review-step-2-scenarios.md`).
 - **Operations' S326 privacy final read (letter, archived):** its three rows applied word for word (`f2fc144`): legal
   basis for support messages (KVKK 5/2-c, f), a "Your rights" section (KVKK 11, 30 days), "a crash report you chose to
-  send". Changed lines EN+TR sent (`letters/FabervantOps/2026-11-15-ulak-s26-privacy-page-three-rows-applied.md`).
+  send". Changed lines EN+TR sent (letter `2026-11-15-ulak-s26-privacy-page-three-rows-applied.md`).
 - **[K8] done:** Hono 4.13.7 -> 4.13.16 (`865ba31`); `npm audit` lists no Hono advisory; `npm test` 547 passed,
   typecheck clean. 10 dev-tooling advisories remain (vitest mocker, sharp, zod), on the to-do list.
 
