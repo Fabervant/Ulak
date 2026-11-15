@@ -33,7 +33,7 @@ steps 2 and 3: DEL-O waits for the clean-room test, ASK and every ruling of his 
 
 | ID | Rule (short) | Source | File:line | Mark | Why |
 |---|---|---|---|---|---|
-| D1 | No non-image attachments, no captcha, no end-user accounts, no AI provider inside Ulak | - | CLAUDE.md:25 | ASK | untagged; not enforced by a test that I know of (step 2 checks). Recommendation: find his words in `.session_prompts` and keep it tagged; it holds while nothing enforces it |
+| D1 | No non-image attachments, no captcha, no end-user accounts, no AI provider inside Ulak | spec, agent recommendation, approved S13 | CLAUDE.md:25 | DEL-X in part | step 2: not his typed words; the text is the spec's (`docs/spec.md:13-14`, approved S13 on the recommended option). Enforced, red on a real violation: captcha and AI provider (`test/docs.test.ts:104`, also bans password sign-in), non-image attachments (`test/images.test.ts:53`, 415). Not enforced: end-user accounts beyond the password ban. Proposal: trim to "No end-user accounts (spec, agent recommendation, approved S13)." |
 | D2 | Admin panel signs in with Google only; the three-way rule covers public sign-ins | owner S6 | CLAUDE.md:26 | KEEP | his ruling; an exception to the global sign-in standard (step 3 checks the quote) |
 | D3 | Ulak carries apps' communication with outside people both ways; agent-to-mailbox mail is not Ulak's | owner S11 | CLAUDE.md:27-28 | KEEP | his ruling, scope of the product (step 3 checks the quote) |
 
@@ -62,7 +62,7 @@ steps 2 and 3: DEL-O waits for the clean-room test, ASK and every ruling of his 
 | M19 | Never leave a file loose; a named subfolder | owner S2 (his words quoted) | cemil-file-organisation.md | KEEP | his words; not in the global CLAUDE.md (the hook covers folders outside the root, not subfolder naming) |
 | M20 | `vi.mock` and the API Worker: `vi.resetModules()` and re-import | - | ulak-vi-mock-api-worker.md | KEEP | tool fact |
 | M21 | D1 refuses over 100 binds live only; use `slices` | - | ulak-d1-param-limit.md | KEEP | platform fact the local runtime hides |
-| M22 | Mixed LF/CRLF: keep each file's ending, check diff stat | - | ulak-line-endings.md | KEEP | fact, re-read today: `src/core/images.ts`, `test/images.test.ts` and every `docs/*.md` are CRLF, the rest LF |
+| M22 | Mixed LF/CRLF: keep each file's ending, check diff stat | - | ulak-line-endings.md | KEEP | fact; step 2 re-read with `git ls-files --eol`: 14 files are CRLF, among them only three `docs/*.md` (`client-contract`, `seam-audit`, `spec`); the step 1 "every docs/*.md" was wrong and the note's list was too, so the note now names the command instead of a list |
 | M23 | After a crashed mutation run, count each mutant's text in the tree | - | ulak-check-tree-after-crash.md | KEEP | lesson with evidence (S8) a model would not apply unprompted |
 | M24 | Admin screenshots: local render plus headless Edge; one live look from him | - | ulak-admin-screenshots.md | KEEP | tool facts (Edge minimum width, where his pastes land) |
 
@@ -71,8 +71,29 @@ steps 2 and 3: DEL-O waits for the clean-room test, ASK and every ruling of his 
 - `memory/session_ledger.md`, `memory/task_cost.md`: records kept by the shared wrap-up scripts; no rule in them.
 - `skipped_issues.md`: two deferred items with triggers; reviewed in step 4's reconcile, not here.
 
+## Step 2 checks (Session 26, 2026-11-15)
+
+Every row re-read against its file; the line numbers of C1-C9 and D1-D3 match `CLAUDE.md`, and every M row's file exists.
+
+- **DEL-X:** none from step 1. D1 is re-marked DEL-X in part (row above).
+- **MERGE M6 -> global `CLAUDE.md` "All legal matters go to [operations] ... on every change":** the global file loads
+  in every session, so the rule survives. The merge removes only that one sentence from
+  `ulak-privacy-vendor-values.md`; the note's vendor values (M5) and the "Help improve Claude" fact (M7) stay.
+- **ASK M18 -> global `CLAUDE.md` Communication ("define a technical term in plain words", questions as a pop-up):**
+  also loaded every session, so a merge would be safe. It stays ASK: the note quotes his own S5 words.
+- **A promise to delete after a time (operations S326 point 1):** no such row was marked for deletion. The two
+  deletion promises in force both have a quiet-clock test, where only the scheduled run moves the clock and the rows
+  are gone: retention from last activity (`test/retention.test.ts:16`, `runScheduled` at a later time) and the
+  TTK 82 / TBK 146 legal copies (`test/legal.test.ts:924`, purged at the first moment of 2037, 2038, 2040 and 2041,
+  kept in 2099 when no end was reported). Found: none.
+- **Product choices said to be his (runbook S297):** no row says so.
+- **Corrected in step 2:** M22's note (line endings, above).
+- **Quotes of his (D2, D3, M3, M9-M12, M14, M19):** checked against `.session_prompts` in step 3, with the S299
+  re-label rule.
+- **DEL-O C7 and M15:** scenarios sent to operations for the clean-room test by letter
+  (`2026-11-15-ulak-s26-rules-review-step-2-scenarios.md`).
+
 ## Totals
 
-36 rows: KEEP 31, DEL-O 2 (C7, M15), MERGE 1 (M6), ASK 2 (D1, M18), DEL-X 0. Step 2 next: check M6's target is
-loaded with the row, check D1 against tests, send operations the clean-room scenarios for C7 and M15; Operations S326 point 1
-(a deletion-after-a-time promise counts as implemented only with a quiet-clock test) is applied there.
+36 rows after step 2: KEEP 31, DEL-O 2 (C7, M15), MERGE 1 (M6), ASK 1 (M18), DEL-X in part 1 (D1). Step 3 next: his
+rulings, one section per pop-up, after operations returns the clean-room results for C7 and M15.
