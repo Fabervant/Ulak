@@ -59,8 +59,12 @@ design keeps a second destination addable, and every inbound mail is data, never
    message that carries a contact address, once the app's text is set: Ulak cannot know a message is a withdrawal
    until the operator reads it, and read 9 asks for "at once". It never goes to an automatic mail (`Auto-Submitted`,
    `Precedence: bulk/list/junk`, a mailer-daemon or no-reply sender), never to a mail whose sender fails its own
-   domain's check (no backscatter to forged senders), and at most once a day per address per app. Without its text
-   the app sends none and the admin panel says so.
+   domain's check (no backscatter to forged senders), and at most once a day per address per app. **The daily cap
+   never holds back a withdrawal's confirmation** (operations, 2026-11-15, read 9: art 11(2) asks for it "at once" for
+   every withdrawal through a route the app offers): a form message the app sends with `purpose: "withdrawal"` (its
+   withdrawal form; a new optional field of the submit call) always gets it, and marking a message as a withdrawal
+   sends it if none went for that message. A form message has no domain check: the typed contact address gets it.
+   Without its text the app sends none and the admin panel says so. (Operations agreed decisions 1 and 2, 2026-11-15.)
 4. **A reply is shown in the person's own thread only when** its token is valid, the hash of its From address equals
    the original recipient's hash, the sender's domain check passes, and the original mail carried a `user_ref`.
    Anything else is for the operator only. (The spec's address check, plus the domain check, because a From header
@@ -165,17 +169,19 @@ law counts it. Task 1 checks on a real forwarded mail that the header survives.
 
 Each task: a failing test first, then the code, then `npm test`; one commit each.
 
-1. **Checks before code (read only, no code):** the company domain's DNS is on the platform (its mail routing needs the
-   zone there) and the routing takes a subdomain; the MIME parser runs in Workers and its size; from operations: the
-   provider's forward keeps a copy in the mailbox, keeps the original From, and keeps the `Received` chain; which apps
-   sell and so get a forward. Any "no" comes back to the owner before task 2.
+1. **Checks before code (read only, no code):** the MIME parser runs in Workers and its size; from operations: the
+   provider's forward keeps a copy in the mailbox, keeps the original From, and keeps the `Received` chain (operations
+   tests one forward). Any "no" comes back to the owner before task 2. Answered by operations 2026-11-15: the company
+   domain's zone is on the platform, so its mail routing can serve a subdomain (operations turns it on when sent the
+   exact records); one app sells today, a second will later; each gets its forward after its own read 10.
 2. Migration `0009_inbound.sql` and the row types.
 3. Reply and forward addresses: build, sign, verify; `vendorBody`'s `Reply-To` by the app's switch.
 4. MIME parsing to the filing input: sender, text, images, automatic-mail and domain-check flags, arrival time.
 5. Filing: deny list, dedupe, message and images, thread visibility, ping folding.
 6. The inbound Worker, `wrangler.inbound.example.jsonc`, and its entry in `docs/self-hosting.md`.
 7. The operator's answer by mail (decision 5).
-8. The receipt confirmation (decision 3) and the per-app texts in the admin Apps form.
+8. The receipt confirmation (decision 3), the submit call's optional `purpose: "withdrawal"` (the client contract
+   gains it; clients told before it ships), and the per-app texts in the admin Apps form.
 9. Withdrawal clocks: mark, open by hand, pings, done, keeping.
 10. Deletion and retention for inbound messages and withdrawal records.
 11. Admin panel: the deny list and the dropped counts, per-app switches and the forward secret, the source and
