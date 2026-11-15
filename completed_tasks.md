@@ -12,6 +12,12 @@
   path as `next`, it rides in the state cookie (base64url), the callback lands there; only a page of the panel is
   accepted (`//host`, `/\host`, a full URL or `/auth/*` land on Messages). Test red first ("/"), then green; 548 passed.
   Not deployed: goes with the next deploy on his word.
+- **Letters (archived):** operations S326 (shared test picker `pick_tests.py`; quiet-clock tests asked with each legal
+  text): nothing owed now; Ulak keeps `scripts/test-impact.mjs` until it next changes. The payments service's S6
+  questions answered (`letters/Tezgahtar/2026-11-15-ulak-s27-answers-legal-documents-questions.md`): each selling app
+  sends under its own Ulak app and send key (app, key and tick are the owner's, put to him with the deploy); no re-call
+  of rows Ulak took (the row is written before the `202`, `src/api/mail.ts:61`), but a look-back against the payment
+  provider's completed sales; one reference for a subscription's life; `legal/end` not live until the deploy.
 
 ## Session 26 — 2026-11-15
 
