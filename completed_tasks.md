@@ -1,5 +1,22 @@
 # Completed tasks
 
+## Session 25 — 2026-11-15
+
+- **[K5] done ([O3], operations S325 point 2 and 3):** `d1cbbe1`: a legal copy is deleted only once both its sending
+  year + `LEGAL_KEEP_YEARS` and its `keep_from` year + the same years have passed (Türkiye calendar); a one-off copy's
+  `keep_from` is its acceptance, a subscription's is the reported end, so an unreported end keeps the copy. Once a year
+  the operator's Telegram gets the per-app count of subscription copies past their TTK date with no end reported
+  (`reportCopiesWithoutEnd`, claim-then-send shared with the daily reminder in `sendOncePer`). Named test (S291 pair, sent
+  2026 / ended 2030 kept to the first moment of 2041, no-end copy kept in 2099) and the yearly-count test were red (3
+  failed) before the code; `npm test` 546 passed. Contract, self-hosting doc and privacy section B (operations' wording)
+  updated. Letters: both clients told of the end call before it ships; operations got the whole page EN+TR
+  (`{{CONTACT}}` ops@fabervant.com, storage region WEUR read live, support sections in Turkish for the first time) and
+  the correction that the Zoho "Save content" setting was read unticked in S20 (the S24 "never read" was wrong).
+  Deploy waits on his word.
+- **[K6] done:** rules review step 1 (`308257e`): `docs/rules-review/2026-11-15-rules-inventory.md`, before figures
+  (CLAUDE.md 1,723 B; MEMORY.md 2,374 B / 22 lines; 24 memory files; no lessons, skills or hooks) and 36 rows: KEEP 31,
+  DEL-O 2, MERGE 1, ASK 2. Other projects' names kept out (public repo). Lettered to operations.
+
 ## Session 24 — 2026-11-15
 
 - **[K3] done:** phase 2 task 1, Ulak's side (`2707005`): `postal-mime` 4.2.0 (MIT-0, no dependencies, kept up) runs in the
