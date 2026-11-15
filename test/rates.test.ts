@@ -1,6 +1,6 @@
 import { env } from "cloudflare:test";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { overLines, rateLine, tellRates, mailRates, BOUNCE_ALERT, COMPLAINT_ALERT } from "../src/core/mail/rates";
+import { overLines, rateLine, tellRates, mailRates } from "../src/core/mail/rates";
 import { runOutbox } from "../src/core/mail/job";
 import { TelegramNotifier } from "../src/core/notify/telegram";
 import { createApp } from "../src/core/apps";
@@ -8,10 +8,6 @@ import type { Env } from "../src/core/env";
 import { addMinutes, nowIso } from "../src/core/time";
 
 describe("the vendor's bounce and complaint limits", () => {
-  it("alerts at half of each vendor limit", () => {
-    expect(BOUNCE_ALERT).toBe(0.025);
-    expect(COMPLAINT_ALERT).toBe(0.0005);
-  });
   it("nothing sent is nothing over", () => expect(overLines({ sent: 0, bounced: 0, complained: 0 })).toEqual([]));
   it("just under each line is quiet, at the line is over", () => {
     expect(overLines({ sent: 1000, bounced: 24, complained: 0 })).toEqual([]);

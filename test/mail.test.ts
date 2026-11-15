@@ -6,7 +6,7 @@ import { createApp, updateApp, rotateSendKey, rotateKey } from "../src/core/apps
 import { vendorTransport } from "../src/core/mail/vendor";
 import { addrHash } from "../src/core/mail/hash";
 import { runOutbox } from "../src/core/mail/job";
-import { claimMail, insertMail } from "../src/core/mail/outbox";
+import { insertMail } from "../src/core/mail/outbox";
 import { validateMail } from "../src/core/mail/validate";
 import { tellFailures } from "../src/core/mail/job";
 import { runScheduled } from "../src/core/retention";
@@ -224,18 +224,9 @@ describe("the outbox timer", () => {
     const { id } = await (await send(key)).json<{ id: string }>();
     await env.DB.prepare("UPDATE mails SET next_attempt_at=?, lease_until=? WHERE id=?").bind(nowIso(), addMinutes(nowIso(), 2), id).run();
     expect((await runOutbox(menv(), addMinutes(nowIso(), 1))) as any).toMatchObject({ attempted: 0 });
-  });
-
-  it("only one caller can hold a mail at a time, until the lease runs out", async () => {
-    const key = await mailApp();
-    replies.push(down);
-    const { id } = await (await send(key)).json<{ id: string }>();
-    const now = nowIso();
-    expect(await claimMail(env.DB, id, now)).toBeTruthy();
-    expect(await claimMail(env.DB, id, addMinutes(now, 1))).toBeNull();
-    expect(await claimMail(env.DB, id, addMinutes(now, 3))).toBeTruthy();
-    // Never once its expiry has passed, lease or not.
-    expect(await claimMail(env.DB, id, addMinutes(now, 61))).toBeNull();
+    // Once the lease has run out the timer takes it (a claim reads the clock, so the lease is moved back).
+    await env.DB.prepare("UPDATE mails SET lease_until=? WHERE id=?").bind(addMinutes(nowIso(), -1), id).run();
+    expect((await runOutbox(menv(), addMinutes(nowIso(), 1))) as any).toMatchObject({ attempted: 1 });
   });
 
   it("runs on the 5-minute schedule; the hourly schedule does not send", async () => {

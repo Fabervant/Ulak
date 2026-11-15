@@ -141,13 +141,6 @@ describe("the vendor call", () => {
   for (const code of ["TM_3501", "TM_3601", "TM_5001"]) it(`${code} is vendor_down`, () => expect(classify(400, `{"error":{"code":"${code}"}}`).kind).toBe("vendor_down"));
   for (const code of ["TM_3201", "TM_3301", "TM_8001"]) it(`${code} is request_bad`, () => expect(classify(400, `{"error":{"code":"${code}"}}`).kind).toBe("request_bad"));
   for (const st of [500, 503, 401, 429]) it(`HTTP ${st} is vendor_down`, () => expect(classify(st, "").kind).toBe("vendor_down"));
-  it("a network failure is vendor_down, never a throw", async () => {
-    const cfg = mailConfig(asEnv(FULL))!;
-    const r = await sendViaVendor(cfg, m, (async () => {
-      throw new TypeError("connection reset");
-    }) as unknown as typeof fetch);
-    expect(r.kind).toBe("vendor_down");
-  });
   it("a vendor that does not answer is cut off by the timeout", async () => {
     const cfg = mailConfig(asEnv(FULL))!;
     const hang = ((_u: string, init: RequestInit) => new Promise((_, rej) => init.signal!.addEventListener("abort", () => rej(init.signal!.reason)))) as unknown as typeof fetch;

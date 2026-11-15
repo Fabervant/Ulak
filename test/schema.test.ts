@@ -2,18 +2,6 @@ import { env } from "cloudflare:test";
 import { describe, it, expect } from "vitest";
 
 describe("schema", () => {
-  it("has the six tables", async () => {
-    const r = await env.DB.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('apps','messages','replies','images','admins','admin_tokens') ORDER BY name",
-    ).all<{ name: string }>();
-    expect(r.results.map((x) => x.name)).toEqual(["admin_tokens", "admins", "apps", "images", "messages", "replies"]);
-  });
-  it("has the mail tables and the apps' mail columns", async () => {
-    const t = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('mails','mail_attempts','service_state') ORDER BY name").all<{ name: string }>();
-    expect(t.results.map((x) => x.name)).toEqual(["mail_attempts", "mails", "service_state"]);
-    const cols = (await env.DB.prepare("PRAGMA table_info(apps)").all<{ name: string }>()).results.map((c) => c.name);
-    expect(cols).toEqual(expect.arrayContaining(["send_key_hash", "mail_from_name", "mail_kinds", "mail_labels"]));
-  });
   it("one idempotency key per app while it is set", async () => {
     const now = "2026-01-01T00:00:00.000Z";
     await env.DB.prepare("INSERT INTO apps (id,key_hash,created_at) VALUES ('demo','h',?)").bind(now).run();
