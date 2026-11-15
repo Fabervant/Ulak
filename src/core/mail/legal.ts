@@ -12,7 +12,7 @@ import { SENDER_SEPARATOR } from "./vendor";
 
 interface LegalConfig {
   /** The copy's keeping period in whole years, counted from the end of the calendar year it was
-   *  sent in (TTK art 82(5)-(6)). */
+   *  sent in (TTK art 82(5)-(6)) and, for a subscription, the year it ended (TBK art 146). */
   keepYears: number;
   /** How long Ulak keeps trying to send a legal document. */
   expiryHours: number;
@@ -351,31 +351,37 @@ async function openAlertCounts(db: D1Database): Promise<Array<{ app: string; n: 
 /** The reminder's line: the number of open alerts per app, nothing else. */
 const reminderLine = (counts: Array<{ app: string; n: number }>): string => `[legal] open alerts: ${counts.map((c) => `${c.app} ${c.n}`).join(", ")}`;
 
-/** While any alert is open, one line a day (owner, Session 15). The day is claimed in `service_state`
- *  by a conditional write before sending and given back if the send fails, so two runs on one day
- *  never both send it. Returns whether the line was sent. */
-export async function remindOpenAlerts(env: Env, now: string = nowIso()): Promise<boolean> {
+/** Sends `text` to the operator at most once per `period` (a day, a year): the period is claimed in
+ *  `service_state` under `key` by a conditional write before sending and given back if the send
+ *  fails, so two runs in one period never both send it and a failed one is tried at the next run.
+ *  Returns whether the line was sent. */
+async function sendOncePer(env: Env, key: string, period: string, text: string, now: string): Promise<boolean> {
   const channel = channelFromEnv(env);
   if (!channel) return false;
-  const counts = await openAlertCounts(env.DB);
-  if (!counts.length) return false;
-  const day = now.slice(0, 10);
-  const prior = (await env.DB.prepare("SELECT value FROM service_state WHERE key='legal_reminder_day'").first<{ value: string }>())?.value ?? null;
+  const prior = (await env.DB.prepare("SELECT value FROM service_state WHERE key=?").bind(key).first<{ value: string }>())?.value ?? null;
   const { meta } = await env.DB.prepare(
-    "INSERT INTO service_state (key,value,at) VALUES ('legal_reminder_day',?1,?2) ON CONFLICT(key) DO UPDATE SET value=excluded.value, at=excluded.at WHERE service_state.value<>excluded.value",
+    "INSERT INTO service_state (key,value,at) VALUES (?1,?2,?3) ON CONFLICT(key) DO UPDATE SET value=excluded.value, at=excluded.at WHERE service_state.value<>excluded.value",
   )
-    .bind(day, now)
+    .bind(key, period, now)
     .run();
   if (meta.changes !== 1) return false;
   try {
-    await channel.send({ text: reminderLine(counts), adminLink: legalLink(env) });
+    await channel.send({ text, adminLink: legalLink(env) });
     return true;
   } catch (e) {
-    console.error("legal reminder line", e instanceof Error ? e.message : String(e));
-    if (prior === null) await env.DB.prepare("DELETE FROM service_state WHERE key='legal_reminder_day' AND value=?").bind(day).run();
-    else await env.DB.prepare("UPDATE service_state SET value=? WHERE key='legal_reminder_day' AND value=?").bind(prior, day).run();
+    console.error(key, e instanceof Error ? e.message : String(e));
+    if (prior === null) await env.DB.prepare("DELETE FROM service_state WHERE key=? AND value=?").bind(key, period).run();
+    else await env.DB.prepare("UPDATE service_state SET value=? WHERE key=? AND value=?").bind(prior, key, period).run();
     return false;
   }
+}
+
+/** While any alert is open, one line a day (owner, Session 15). Returns whether it was sent. */
+export async function remindOpenAlerts(env: Env, now: string = nowIso()): Promise<boolean> {
+  if (!channelFromEnv(env)) return false;
+  const counts = await openAlertCounts(env.DB);
+  if (!counts.length) return false;
+  return sendOncePer(env, "legal_reminder_day", now.slice(0, 10), reminderLine(counts), now);
 }
 
 const CLOSE_REASON_MAX = 500;
@@ -480,8 +486,8 @@ export function copyText(d: LegalDocument): string {
 const REF = /^[A-Za-z0-9._:/-]{1,64}$/;
 
 /** The subscription ended: recorded on its copies with no end yet, so a renewal's documents share it
- *  and a repeat changes nothing. Kept for the clients that call it; it no longer sets when a copy is
- *  deleted (that counts from the copy's own sending year, `purgeLegal`). */
+ *  and a repeat changes nothing. Its calendar year sets the second of a copy's two deletion dates
+ *  (`purgeLegal`); until it is called, a subscription's copy is not deleted. */
 export async function reportEnd(db: D1Database, app: string, raw: unknown, now: string): Promise<number> {
   const b = (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   if (typeof b.reference !== "string" || !REF.test(b.reference)) throw invalid("reference", "reference must match [A-Za-z0-9._:/-]{1,64}");
@@ -497,20 +503,26 @@ export async function reportEnd(db: D1Database, app: string, raw: unknown, now: 
 
 /** The calendar year a legal copy belongs to is Türkiye's (UTC+3 all year since 2016). */
 const LEGAL_YEAR_UTC_OFFSET_MS = 3 * 60 * 60 * 1000;
+const legalYear = (now: string): number => new Date(Date.parse(now) + LEGAL_YEAR_UTC_OFFSET_MS).getUTCFullYear();
 
 /** The first instant of the legal calendar year `years` before the one `now` falls in. A copy sent
  *  before it was sent in a year that ended `years` or more years ago, so its period has passed. */
 export function keepCutoff(now: string, years: number): string {
-  const year = new Date(Date.parse(now) + LEGAL_YEAR_UTC_OFFSET_MS).getUTCFullYear();
+  const year = legalYear(now);
   return new Date(Date.UTC(year - years, 0, 1) - LEGAL_YEAR_UTC_OFFSET_MS).toISOString();
 }
 
 /** Deletes the copies whose keeping period, as set at this run, has passed, a slice at a time; their
  *  alerts go with them, open or not. Each copy is kept to the end of the calendar year it was sent in
  *  plus the years set (TTK art 82(5)-(6)); a copy the mail service never accepted counts from when
- *  Ulak accepted it. */
+ *  Ulak accepted it. A subscription's copy is also kept to the end of the calendar year its
+ *  subscription ended plus the same years (TBK art 146), whichever is later, and is never deleted
+ *  while its end is unreported (`keep_from` null); a one-off copy's `keep_from` is its acceptance, so
+ *  the second date never holds it longer (FabervantOps S325). */
 export async function purgeLegal(db: D1Database, keepYears: number, now: string): Promise<number> {
-  const due = db.prepare(`SELECT mail_id FROM legal_documents WHERE COALESCE(sent_at, created_at)<? LIMIT ${D1_MAX_PARAMS}`).bind(keepCutoff(now, keepYears));
+  const due = db
+    .prepare(`SELECT mail_id FROM legal_documents WHERE COALESCE(sent_at, created_at)<?1 AND keep_from<?1 LIMIT ${D1_MAX_PARAMS}`)
+    .bind(keepCutoff(now, keepYears));
   let purged = 0;
   for (;;) {
     const ids = (await due.all<{ mail_id: string }>()).results.map((r) => r.mail_id);
@@ -519,4 +531,26 @@ export async function purgeLegal(db: D1Database, keepYears: number, now: string)
     purged += ids.length;
     if (ids.length < D1_MAX_PARAMS) return purged;
   }
+}
+
+/** Subscription copies past their sending year's period whose subscription end was never reported,
+ *  per app: kept, since the subscription may still run, but a client that forgets the end call
+ *  would keep them forever. */
+async function copiesWithoutEnd(db: D1Database, keepYears: number, now: string): Promise<Array<{ app: string; n: number }>> {
+  return (
+    await db
+      .prepare("SELECT app, COUNT(*) n FROM legal_documents WHERE keep_from IS NULL AND COALESCE(sent_at, created_at)<? GROUP BY app ORDER BY app")
+      .bind(keepCutoff(now, keepYears))
+      .all<{ app: string; n: number }>()
+  ).results;
+}
+
+/** Once a legal calendar year, while any exist, the operator gets the count of `copiesWithoutEnd`
+ *  per app, to ask those apps for their end calls (FabervantOps S325). Returns whether it was sent. */
+export async function reportCopiesWithoutEnd(env: Env, keepYears: number, now: string = nowIso()): Promise<boolean> {
+  if (!channelFromEnv(env)) return false;
+  const counts = await copiesWithoutEnd(env.DB, keepYears, now);
+  if (!counts.length) return false;
+  const text = `[legal] subscription copies past their keeping period with no end reported (ask the app for the end call): ${counts.map((c) => `${c.app} ${c.n}`).join(", ")}`;
+  return sendOncePer(env, "legal_no_end_year", String(legalYear(now)), text, now);
 }

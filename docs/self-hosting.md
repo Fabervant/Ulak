@@ -236,13 +236,14 @@ SHA-256 of the text, and the sender block that went under it) for a keeping peri
 
 | Name | Value |
 |---|---|
-| `LEGAL_KEEP_YEARS` | the keeping period in whole years, 1 to 99, counted per copy from the end of the calendar year it was sent in (Türkiye's calendar, UTC+3); for example `10` for ten years (Turkish Commercial Code art 82). Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period. The former `LEGAL_KEEP_DAYS` is refused as a bad setting until it is removed |
+| `LEGAL_KEEP_YEARS` | the keeping period in whole years, 1 to 99, counted per copy from the end of the calendar year it was sent in (Türkiye's calendar, UTC+3), and for a subscription's copy also from the end of the calendar year the subscription ended, whichever is later; for example `10` for ten years (Turkish Commercial Code art 82, Turkish Code of Obligations art 146). Take it from your own legal advice. While it is unset, legal documents are refused, so no copy is kept under a guessed period. The former `LEGAL_KEEP_DAYS` is refused as a bad setting until it is removed |
 | `LEGAL_EXPIRY_HOURS` | optional: how long Ulak keeps trying to send one, 1 to 72; 24 when unset |
 
 A value outside its range makes legal calls answer `500 legal_config_bad` and turns the result check
 red within five minutes. The period is applied at each hourly run, so changing it changes every
-copy's period at once. A copy is deleted at the first hourly run after its period ends, whether or not its
-subscription's end was reported.
+copy's period at once. A copy is deleted at the first hourly run after its period ends; a subscription's
+copy whose end the app never reported is not deleted, and once a year Telegram gets the count of such
+copies past their sending year's period, per app, so you can ask the app for its end calls.
 
 Then, per app, on **Apps**: the *sends legal documents* tick (refused until the five-minute timer has
 seen `LEGAL_KEEP_YEARS` set) and the app's label for the documents.

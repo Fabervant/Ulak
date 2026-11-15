@@ -120,7 +120,7 @@ export function mountMail(app: Hono<Ctx>): void {
     return c.json(await deleteMailsByAddress(c.env.DB, tenant.id, await addrHash(cfg.hashSecret, tenant.id, address)));
   });
 
-  // The subscription ended: recorded on its legal copies (no longer sets when they are deleted).
+  // The subscription ended: its legal copies' second deletion date counts from `ended_at`.
   app.post("/v1/mail/legal/end", async (c) => {
     refuseBrowser(c);
     const raw = await readJsonCapped(c.req.raw);

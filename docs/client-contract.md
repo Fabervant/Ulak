@@ -193,7 +193,7 @@ The operator also records, for your app: the From name, which kinds it sends (`t
 | `POST` | `/v1/mail` | send one mail |
 | `GET` | `/v1/mail/status` | whether Ulak can send right now |
 | `POST` | `/v1/mail/delete` | delete every record of mail to one address |
-| `POST` | `/v1/mail/legal/end` | a subscription ended: its legal documents' keeping period starts |
+| `POST` | `/v1/mail/legal/end` | a subscription ended: its legal documents' second keeping date is set |
 
 ### `POST /v1/mail`
 
@@ -287,7 +287,7 @@ The call is `POST /v1/mail` with `"kind": "legal_document"` and one more field:
 |---|---|
 | `document.version` | the document version the buyer accepted; `[A-Za-z0-9._:/-]`, 1 to 64 characters |
 | `document.reference` | your order number, which the operator searches by; the same characters |
-| `document.sale` | `one_off` or `subscription`; recorded with the copy. It no longer changes the keeping period: each copy is kept for the operator's period from the end of the calendar year it was sent in |
+| `document.sale` | `one_off` (kept for the operator's period from the end of the calendar year it was sent in) or `subscription` (kept to that date or for the same period from the end of the calendar year the subscription ended, whichever is later; never deleted before you report the end) |
 | `text` | plain text only: `html` is refused (`422 bad_html`) |
 | `expires_at` | at most 24 hours ahead unless the operator set another window (at most 72) |
 | `idempotency_key` | the sale's id. For a legal document it never expires while the copy is kept: a repeat a year later still sends nothing |
@@ -317,8 +317,10 @@ answer comes before the mail is sent, so it is fast; any other answer (`400`, `4
   with the same key. An accepted one sends nothing; one your records show was never accepted is sent,
   and you ping the owner that it was missed. A sale with no linked acceptance is never called; list it
   in the owner ping as an alert. If the job has not completed a run in 36 hours, ping the owner.
-- **The subscription's end:** `POST /v1/mail/legal/end` is still accepted, but no longer needed: it
-  does not change when a copy is deleted.
+- **The subscription's end:** call `POST /v1/mail/legal/end` when a subscription ends (and report the
+  ends your daily reconciliation finds, so a missed call is made up the next day). Until it is called,
+  the subscription's copies are kept; once a year the operator is shown, per app, the copies past their
+  first date whose end was never reported, and asks the app.
 
 ### `POST /v1/mail/legal/end`
 
@@ -328,8 +330,10 @@ answer comes before the mail is sent, so it is fast; any other answer (`400`, `4
 
 With the send key, from your server. Records the subscription's end on every legal document of your
 app with that reference that has none yet; a repeat changes nothing. `ended_at` is ISO 8601 and not
-in the future. Answers `{"updated": n}`. It no longer changes when a copy is deleted: each copy is
-kept for the operator's period from the end of the calendar year it was sent in.
+in the future, and not earlier than the newest of those documents. Answers `{"updated": n}`. Each
+copy is then deleted at the later of two dates: the operator's period from the end of the calendar year
+it was sent in, and the same period from the end of the calendar year in `ended_at` (both in Türkiye's
+calendar, UTC+3).
 
 ### `GET /v1/mail/status`
 

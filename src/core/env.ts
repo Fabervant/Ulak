@@ -33,8 +33,8 @@ export interface Env {
   MAIL_WEBHOOK_KEY?: string;
   MAIL_HASH_SECRET?: string;
   MAIL_SENDER_INFO?: string;
-  /** Legal documents: the copy's keeping period in years from the end of its sending year; unset refuses
-   *  legal documents (src/core/mail/legal.ts). */
+  /** Legal documents: the copy's keeping period in years from the end of its sending year and, for a
+   *  subscription, of its end year, the later; unset refuses legal documents (src/core/mail/legal.ts). */
   LEGAL_KEEP_YEARS?: string;
   /** The former day count; set, it makes the legal settings bad until removed. */
   LEGAL_KEEP_DAYS?: string;

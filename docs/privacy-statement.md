@@ -82,11 +82,16 @@ If you buy in an app that sends its after-sale documents (the pre-contract infor
 contract) through this service, the exact mail sent to you (its subject, text, your address, the
 document version and the order number) and {{MAIL_VENDOR}}'s report that your mail server accepted
 it are kept for 10 years from the end of the calendar year in which it was sent to you, as the
-Turkish Commercial Code requires (art. 82), and then deleted automatically. They are kept even if
-you ask for deletion earlier. The operator can download a copy to resend it
-to you; it is never shown to anyone else.
+Turkish Commercial Code requires (art. 82). The documents of a subscription are also kept while the
+subscription runs and for 10 years from the end of the calendar year in which it ended, the time in
+which a claim under the contract can be brought (Turkish Code of Obligations, art. 146); the later
+date applies. Then they are deleted automatically. They are kept even if you ask for deletion
+earlier. The operator can download a copy to resend it to you; it is shown to no one else, unless a
+court, a consumer arbitration committee or an authority requires it, or we need it to answer a
+claim.
 
-Why: a legal duty of the seller.
+Why: a legal duty of the seller (art. 82 above) and, for a subscription, proving the terms of a
+contract that is still running or within its claim period.
 
 ## Replies you send to an app's mail
 
