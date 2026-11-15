@@ -7,6 +7,8 @@ can mark a message as a withdrawal, which opens a 14-day refund clock that pings
 
 **Started:** the owner, Session 22: "Write the plan now (Recommended)" (agent recommendation, approved S22). Nothing in
 this plan is built before the owner approves it.
+**Approved, built ahead, deployed after the gates:** the owner, Session 23: "Approve, build now (Recommended)"
+(agent recommendation, approved S23).
 
 **Goes live only after:** operations closes legal read 10 for each app whose channel opens (per app: its replies and
 its forwarded mailbox, including whether any of it can be seen by another person) and the AI-assistant row of read 1
