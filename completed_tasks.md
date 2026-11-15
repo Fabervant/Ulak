@@ -1,5 +1,18 @@
 # Completed tasks
 
+## Session 28 — 2026-11-15
+
+- **[K12] done:** rules review step 4 (`7229525`). Stale copies of C7, D1, D2, M6, M15, M18, M10-M12 searched in tracked
+  files and `memory/`: none left; C7 and D1 subjects in `README.md`/`docs/spec.md` kept as product facts (test-enforced).
+  Code-comment source tags re-labelled from the S14/S15 review pop-up records: `src/core/mail/outbox.ts:58`,
+  `src/core/mail/legal.ts:379`. Index lint OK, 548 passed, before -> after figures in the inventory (36 -> 32 rows,
+  CLAUDE.md 1,723 -> 1,670 B). Report letter to operations (`2026-11-15-ulak-s28-rules-review-step-4-report.md`)
+  (re-labelled rows D2, M10, M11 S5 part, M12, M18; runbook grep misses `(owner, Session n)`; pop-up answers sit only
+  in `review.md`; shared source-tag check proposed).
+- **[K10] done:** `npm audit` 10 -> 0 (`9563462`): wrangler 4.162.0, vitest 4.1.12, `overrides` for sharp, undici, zod
+  inside the copy @cloudflare/vitest-pool-workers pins (0.23.0 pins the same). Runtime deps unchanged. tsc clean, 548
+  passed, three Workers bundle in a dry run.
+
 ## Session 27 — 2026-11-15
 
 - **[K11] done:** rules review step 3. Quotes checked against `.session_prompts` (S299 rule): found word for word D3
