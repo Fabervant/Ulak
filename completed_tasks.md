@@ -4,8 +4,7 @@
 
 Mailbox session; the owner gave the word for the phase 2 plan.
 
-- **Mailbox:** 19 letters from operations (S287-S316) read, acted on and archived; one letter back,
-  `letters/FabervantOps/2026-11-15-ulak-s22-answers-and-privacy-text.md` (filled privacy text EN + TR for review, TTK design and one
+- **Mailbox:** 19 letters from operations (S287-S316) read, acted on and archived; one letter back (filled privacy text EN + TR for review, TTK design and one
   question, mailbox-filter lean, measured volume: test mail only, under 10 a month, read live).
 - **Applied:** CLAUDE.md opens with the ownership sentence (S297); privacy template sections B and C carry the TTK art 82 wording (S291)
   (`9eb10c8`); `docs/work_ledger.md` and `memory/session_timer.md` deleted (S295, S298); memory converted (S303): MEMORY.md 107 lines /
