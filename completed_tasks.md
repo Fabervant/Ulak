@@ -1,5 +1,19 @@
 # Completed tasks
 
+## Session 24 — 2026-11-15
+
+- **[K3] done:** phase 2 task 1, Ulak's side (`2707005`): `postal-mime` 4.2.0 (MIT-0, no dependencies, kept up) runs in the
+  Workers runtime, 91 KB / 29 KB gzipped bundled; a throwaway test parsed two real raw mails from a public archive (From,
+  Message-ID, text, a non-image attachment, `Received` chain, authentication results) and a Turkish encoded header. An
+  HTML-only mail gets no text from it: task 4 converts. Findings under task 1 in the plan; no "no", so no owner question.
+  Operations' forward test still open [W6]. Hono 4.13.7's six advisories checked: none reachable in Ulak; upgrade in todo.
+- **[K4] done:** run-order tests per operations' S288 letter (`6f1f5f6`): `unstubGlobals`, `unstubEnvs`, `restoreMocks` in both
+  vitest configs; `test/leakDetector.ts` (globals, console methods by descriptor, `process.env`, test bindings, fake timers,
+  the mail and Telegram transports) wired in `test/setup.ts`, each check red with its line removed; `test/reverseOrderRunner.ts`
+  (`ULAK_TEST_ORDER=reverse`, imports `TestRunner` from `vitest`: the `vitest/runners` import hangs the Workers pool);
+  the per-test wipe list (`test/wipedTables.ts`) checked against the schema. Normal run named 0; reverse 0 failed; 545 passed
+  both ways. Lettered to operations with the figures.
+
 ## Session 23 — 2026-11-15
 
 - **[K1] done:** phase 2 plan written (`docs/superpowers/plans/2026-11-15-phase-2-inbound.md`, `5cab936`), put to the owner; his answer
