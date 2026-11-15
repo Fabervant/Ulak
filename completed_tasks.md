@@ -1,5 +1,18 @@
 # Completed tasks
 
+## Session 27 — 2026-11-15
+
+- **[K11] done:** rules review step 3. Quotes checked against `.session_prompts` (S299 rule): found word for word D3
+  (S11), M3 (S20), M9 (S21), M11's S4 part, M19 (S2); not in the record D2 (S6), M10 (S3), M12 (S8), M11's S5 part, M18
+  (S5). Five pop-ups, all his picks of the recommended option (agent recommendations, approved S27): C7 deleted
+  (`01e4d00`); D1 trimmed to "No end-user accounts" (`3c63e3a`); D2 Google-only admin panel kept and re-labelled
+  (`5fb26d3`); memory: M15 note and M6 sentence deleted, M10-M12 re-labelled; M18 note deleted. Quote check and rulings
+  table appended to the inventory (`50bb0b5`; memory/ is git-ignored, so that record is the memory rulings' commit).
+- **[K9] done:** after Google sign-in the admin panel returns to the page asked for (`d380386`): a refused GET sends its
+  path as `next`, it rides in the state cookie (base64url), the callback lands there; only a page of the panel is
+  accepted (`//host`, `/\host`, a full URL or `/auth/*` land on Messages). Test red first ("/"), then green; 548 passed.
+  Not deployed: goes with the next deploy on his word.
+
 ## Session 26 — 2026-11-15
 
 - **[K7] done:** rules review step 2 (`96b5523`): every row re-read against its file; D1 is the spec's text (agent
