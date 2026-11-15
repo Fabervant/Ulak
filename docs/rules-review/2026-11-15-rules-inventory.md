@@ -104,5 +104,36 @@ Every row re-read against its file; the line numbers of C1-C9 and D1-D3 match `C
 
 ## Totals
 
-36 rows after step 2: KEEP 31, DEL-O 2 (C7, M15), MERGE 1 (M6), ASK 1 (M18), DEL-X in part 1 (D1). Step 3 next: his
+36 rows after step 2 (step 3 rulings below): KEEP 31, DEL-O 2 (C7, M15), MERGE 1 (M6), ASK 1 (M18), DEL-X in part 1 (D1). Step 3 next: his
 rulings, one section per pop-up (C7 and M15 both 5/5 in the clean room).
+
+## Step 3: quote check (Session 27, 2026-11-15)
+
+Every quote of his checked against `.session_prompts`, with the S299 re-label rule.
+
+| Row | Found | Result |
+|---|---|---|
+| D2 (S6) | no; the S6 record holds no answer of his | put to him; re-labelled from his S27 pick |
+| D3 (S11) | yes, typed: "My priority is that it will handle all the external communication of all our apps" | stays his; the second clause was relayed by operations S248 |
+| M3 (S20) | yes, typed: "yes, you may" (one test mail) | KEEP; "each further mail needs his word" follows from it |
+| M9 (S21) | yes, typed: "Park the thought but let me know what is your take." | KEEP |
+| M10 (S3) | no; the S3 record holds no answer of his | re-labelled "agent record S3" |
+| M11 (S4, S5) | S4 yes, typed: "do it if it won't touch anything on [the first client's] code"; S5 a pick of the recommended option | S5 part re-labelled "agent recommendation, approved S5" |
+| M12 (S8) | no; the S8 record holds only "yes" answers | "(owner, Session 8)" re-labelled "(Session 8)" |
+| M14 | no quote; the "his call" line is the agent's | KEEP, unchanged |
+| M18 (S5) | no; the S5 record holds 9 prompts, none of these words | put to him (ASK) |
+| M19 (S2) | yes, typed: "I don't throw in files into folders without proper subfolder names" | KEEP |
+
+## Step 3: rulings (Session 27, 2026-11-15)
+
+`memory/` is git-ignored (his ruling, operations S187), so a memory ruling's only commit is this record's.
+
+| Section or row | His words (S27) | Applied | Commit |
+|---|---|---|---|
+| CLAUDE.md, C7 deleted; C1-C6, C8, C9 kept | "Apply it (Recommended)" (agent recommendation, approved S27) | line deleted | `01e4d00` |
+| Decisions, D1 trimmed to "No end-user accounts"; D3 kept | "Apply it (Recommended)" (agent recommendation, approved S27) | line trimmed | `3c63e3a` |
+| Decisions, D2 admin panel Google-only | "Google only (Recommended)" (agent recommendation, approved S27) | source re-labelled | `5fb26d3` |
+| Memory, M15 deleted, M6 sentence deleted; the rest kept; M10-M12 re-labelled | "Apply it (Recommended)" (agent recommendation, approved S27) | note and sentence deleted, index line removed, lint OK | this record |
+| M18 plain-language note | "Delete the note (Recommended)" (agent recommendation, approved S27) | note and index line deleted, lint OK | this record |
+
+Step 3 closed: every row ruled and applied. Step 4 (reconcile, measure, report) next.
