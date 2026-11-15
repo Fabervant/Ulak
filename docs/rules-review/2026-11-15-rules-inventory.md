@@ -93,7 +93,16 @@ Every row re-read against its file; the line numbers of C1-C9 and D1-D3 match `C
 - **DEL-O C7 and M15:** scenarios sent to operations for the clean-room test by letter
   (`2026-11-15-ulak-s26-rules-review-step-2-scenarios.md`).
 
+## Clean-room results (operations, 2026-11-15)
+
+5 runs each with no project instructions, graded against the PASS lines written before the runs.
+
+| Row | Passed | Verdict |
+|---|---|---|
+| C7 | 5/5 | deletable as obvious, on his word in step 3 |
+| M15 | 5/5 | deletable as obvious, on his word in step 3 |
+
 ## Totals
 
 36 rows after step 2: KEEP 31, DEL-O 2 (C7, M15), MERGE 1 (M6), ASK 1 (M18), DEL-X in part 1 (D1). Step 3 next: his
-rulings, one section per pop-up, after operations returns the clean-room results for C7 and M15.
+rulings, one section per pop-up (C7 and M15 both 5/5 in the clean room).
