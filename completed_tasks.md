@@ -6,6 +6,27 @@ Mailbox session; the owner gave the word for the phase 2 plan.
 
 - **Mailbox:** 19 letters from operations (S287-S316) read, acted on and archived; one letter back (filled privacy text EN + TR for review, TTK design and one
   question, mailbox-filter lean, measured volume: test mail only, under 10 a month, read live).
+- **Kickoff items of S18-S22 written before tags, closed in their words:** Phase 0 shipping (O2), plan
+  `docs/superpowers/plans/2026-10-28-phase-0-sending.md`: done S20, account open (EU), domain verified with DKIM and the bounce CNAME,
+  the six mail settings set together, `MAIL_SENDER_INFO` the agreed value with postal code 34846, the bounce/complaint rate alert and
+  migration 0007, main also holding phase 1 and migrations 0006-0007, so the phase 0 migrate and deploy carried them (agent, S17); the
+  token and key were in, both clients answered, the agent inbox was read. Phase 0 acceptance: passed S20, read live (the test hard
+  bounce, one real mail's raw source with its sender block, its delivered event). Phase 1 deployment, plan
+  `docs/superpowers/plans/2026-10-30-phase-1-legal-documents.md`: done S21, `LEGAL_KEEP_DAYS=1096` set in `wrangler.api.jsonc`,
+  `npm test` run, api deployed, the plan's live acceptance list run with each test mail on the owner's word via `tmp/s20/test_mail.py
+  <address>` and the app's legal tick for the run taken back after; the receiving-server field read on the first delivered legal copy:
+  the console's preview names none, operations told it stays empty, since a legal copy's evidence names that field; operations ruled
+  it is not needed (S292). Phase 0 built (`80fe7c4`), phase 1 built and reviewed (`aec3608`..`ed1d326`), the deployed state read in
+  Session 18 (API last deployed 2026-10-24, everything through `0e18799`): all since deployed. The second client's answer on point 1
+  (the deletion answer's new field) came and was archived S21. Read the mailbox first and act on every letter, answer any client,
+  every client told before anything it depends on changes: done S20-S22. TTK art 82 (3650 days instead of 1096), the seller of record,
+  and the unpublished privacy section's 10 years against the live 1096 days: answered by operations S291 (10 years from the end of the
+  sending year; build in todo), seller still open; the filled privacy text went to operations in English and Turkish S22; client apps
+  stay off for mail until the account review passes: it passed 2026-11-10, operations holds the chase (owner: "Wait") closed by it.
+  "If nothing above can move ..." items S20-S21: moot, work moved each session. The opening lines (live with two client applications,
+  phases deployed, `LEGAL_KEEP_DAYS` unset, raw delivered event kept by migration 0008, details in `memory/MEMORY.md` under Live state)
+  were state, not tasks; the state now lives in the memory notes.
+  Also closed in their words: customer email sources read (S18); the owner's O2 order ("external communication", "bridges", "incoming and outgoing", "new features", "initial review", "please") is carried in memory/todo.md, phases 0-1 done; the second client's unarchived letter on what changes when deploying, the field ignored by it; agent-inbox and Bitwarden key submitted, sender contact exactly as agreed, the 100-a-day restriction lifted; migrations 0005-0007, credentials in .secrets, webhook set, phases live; the contract decision and something a client depends on; Apple relay passed, the suppression list read; independent verify of the webhook, each blocker named; the outbox.ts maintenance round and the project's published privacy text stay in todo.
 - **Applied:** CLAUDE.md opens with the ownership sentence (S297); privacy template sections B and C carry the TTK art 82 wording (S291)
   (`9eb10c8`); `docs/work_ledger.md` and `memory/session_timer.md` deleted (S295, S298); memory converted (S303): MEMORY.md 107 lines /
   11,645 B to a 22-line index, `memory/todo.md` the one to-do file.
