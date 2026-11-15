@@ -5,9 +5,9 @@ sections 7.1-7.3, 8, 9, 10 and 11.1): replies to the apps' mails come back into 
 forwarded to Ulak behind a vendor filter (decision 5), every inbound message gets its arrival time, and the operator
 can mark a message as a withdrawal, which opens a 14-day refund clock that pings the owner until it is done.
 
-**Started:** the owner, Session 22: "Write the plan now (Recommended)" (agent recommendation, approved S22). Nothing in
+**Started:** agent recommendation, approved S22 ("Write the plan now (Recommended)"). Nothing in
 this plan is built before the owner approves it.
-**Approved, built ahead, deployed after the gates:** the owner, Session 23: "Approve, build now (Recommended)"
+**Approved, built ahead, deployed after the gates:** agent recommendation, approved S23 ("Approve, build now (Recommended)")
 (agent recommendation, approved S23).
 
 **Goes live only after:** operations closes legal read 10 for each app whose channel opens (per app: its replies and
