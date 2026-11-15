@@ -1,5 +1,18 @@
 # Completed tasks
 
+## Session 22 — 2026-11-15
+
+Mailbox session; the owner gave the word for the phase 2 plan.
+
+- **Mailbox:** 19 letters from operations (S287-S316) read, acted on and archived; one letter back,
+  `letters/FabervantOps/2026-11-15-ulak-s22-answers-and-privacy-text.md` (filled privacy text EN + TR for review, TTK design and one
+  question, mailbox-filter lean, measured volume: test mail only, under 10 a month, read live).
+- **Applied:** CLAUDE.md opens with the ownership sentence (S297); privacy template sections B and C carry the TTK art 82 wording (S291)
+  (`9eb10c8`); `docs/work_ledger.md` and `memory/session_timer.md` deleted (S295, S298); memory converted (S303): MEMORY.md 107 lines /
+  11,645 B to a 22-line index, `memory/todo.md` the one to-do file.
+- **Owner:** "Write the plan now (Recommended)" for phase 2 (agent recommendation, approved S22).
+- Carried in `memory/todo.md`: the TTK deletion-rule build, run-order tests (S288), rules review steps 1-5 (S298, S300).
+
 ## Session 21 — 2026-11-08
 
 Phase 1 (legal documents) went live and passed its live list.
