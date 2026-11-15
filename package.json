@@ -29,7 +29,12 @@
     "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260905.1",
     "typescript": "^5.9.0",
-    "vitest": "^4.1.0",
-    "wrangler": "^4.129.0"
+    "vitest": "^4.1.12",
+    "wrangler": "^4.162.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.5",
+    "undici": "^7.30.1",
+    "zod": "^4.6.7"
   }
 }
