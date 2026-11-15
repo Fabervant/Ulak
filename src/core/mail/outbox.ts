@@ -55,7 +55,7 @@ export async function findByIdempotencyKey(db: D1Database, app: string, kind: st
     .first<MailRow>();
 }
 
-/** Whether the vendor reported this address hard-bounced or complained of spam in this app (owner, S14). */
+/** Whether the vendor reported this address hard-bounced or complained of spam in this app (agent recommendation, approved S14). */
 export async function isSuppressed(db: D1Database, app: string, addrHash: string): Promise<boolean> {
   const r = await db.prepare("SELECT 1 x FROM mails WHERE app=? AND addr_hash=? AND status IN ('bounced','complained') LIMIT 1").bind(app, addrHash).first();
   return r !== null;

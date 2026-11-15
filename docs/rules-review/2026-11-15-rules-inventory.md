@@ -137,3 +137,41 @@ Every quote of his checked against `.session_prompts`, with the S299 re-label ru
 | M18 plain-language note | "Delete the note (Recommended)" (agent recommendation, approved S27) | note and index line deleted, lint OK | this record |
 
 Step 3 closed: every row ruled and applied. Step 4 (reconcile, measure, report) next.
+
+## Step 4: reconcile and measure again (Session 28, 2026-11-15)
+
+**Stale copies.** Each deleted or changed rule's subject grepped across the tracked files and `memory/`:
+
+| Row | Copies found | Result |
+|---|---|---|
+| C7 (text, never markup) | `README.md:98`, `docs/spec.md:161`, test name `test/admin.test.ts:400` | kept: they state what Ulak does for a self-hoster and what a test proves, not an agent rule; the rule was deleted as obvious, not as untrue |
+| D1 (captcha, attachments, AI provider) | `README.md:14,100`, `docs/spec.md:14,231` | kept: the spec is the approved source and the scope is still true (enforced by `test/docs.test.ts:104`, `test/images.test.ts:53`) |
+| D2 (owner S6) | none outside dated history | - |
+| M6, M15, M18 | none in `memory/`, notes or `skipped_issues.md` | - |
+| M10-M12 (owner tags) | none left in `memory/` | - |
+
+Dated history (`completed_tasks/`, `docs/drift-reviews/`, `docs/superpowers/plans/`, `docs/specs/`) left as written.
+
+**Source tags in code.** Two comments said "owner" for a pick of the recommended option; both re-labelled from the
+session reviews' pop-up records (the answers are not in `prompts.md`):
+
+| File | Was | Now | Record |
+|---|---|---|---|
+| `src/core/mail/legal.ts:379` | (owner, Session 15) | (agent recommendation, approved S15) | S15 review: "Daily reminder (Recommended)" |
+| `src/core/mail/outbox.ts:58` | (owner, S14) | (agent recommendation, approved S14) | S14 review: "Ulak remembers them (Recommended)" |
+
+**Index.** `memory_lint.py memory/MEMORY.md`: OK. **Full suite:** 25 files, 548 passed.
+**Size test:** Ulak has no own CLAUDE.md size test, so none moves to the fixed 15,360-byte limit.
+
+| Figure | Before (S25) | After (S28) |
+|---|---|---|
+| `CLAUDE.md` | 1,723 bytes, 28 lines | 1,670 bytes, 27 lines |
+| `memory/MEMORY.md` | 2,374 bytes, 22 lines (21 notes + to-do) | 2,156 bytes, 20 lines (19 notes + to-do) |
+| Memory topic files | 24 | 22 (19 notes, `todo.md`, `session_ledger.md`, `task_cost.md`) |
+| Lesson files | 0 | 0 |
+| Project skills | 0 | 0 |
+| Project hooks | 0 | 0 |
+| `skipped_issues.md` | 963 bytes, 2 entries | 963 bytes, 2 entries (both triggers unfired) |
+| Rows | 36 | 32 (C7, M15, M18 deleted; M6 merged) |
+
+Step 4 closed; report letter to operations. Step 5 (tests) next.

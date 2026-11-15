@@ -376,7 +376,7 @@ async function sendOncePer(env: Env, key: string, period: string, text: string, 
   }
 }
 
-/** While any alert is open, one line a day (owner, Session 15). Returns whether it was sent. */
+/** While any alert is open, one line a day (agent recommendation, approved S15). Returns whether it was sent. */
 export async function remindOpenAlerts(env: Env, now: string = nowIso()): Promise<boolean> {
   if (!channelFromEnv(env)) return false;
   const counts = await openAlertCounts(env.DB);
