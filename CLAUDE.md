@@ -22,6 +22,6 @@ routing, `jose` for OpenID Connect, Vitest with the Cloudflare Workers plugin fo
 
 ## Decisions
 - No end-user accounts (spec, agent recommendation, approved S13).
-- The admin panel signs in with Google only; the three-way sign-in rule covers sign-ins the public uses. (owner S6)
+- The admin panel signs in with Google only; the three-way sign-in rule covers sign-ins the public uses. (agent recommendation, approved S27)
 - Ulak carries the apps' communication with people outside the company, both ways; messages between the company's
   own agents and the company mailbox are not Ulak's. (owner S11)
