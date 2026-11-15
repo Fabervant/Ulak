@@ -15,7 +15,6 @@ routing, `jose` for OpenID Connect, Vitest with the Cloudflare Workers plugin fo
 - Every error response is `{ error, retryable, detail }`.
 - `received_at` is the sort key of every list except a user's poll, which follows `last_activity_at`
   (`docs/spec.md`); `last_activity_at` is the only retention clock.
-- Message content is rendered as text, never as markup.
 - Deployment values live in gitignored `wrangler.*.jsonc` and Wrangler secrets; commit only the
   `.example` files with `REPLACE_ME` placeholders.
 - This repository is public. Its notes files describe Ulak and nothing else: no hostnames,
