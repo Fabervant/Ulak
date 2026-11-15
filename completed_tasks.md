@@ -17,6 +17,10 @@
   asked whether Ulak carries other apps' operator alerts: answered yes, already live as `POST /v1/notify` (notice key,
   owner-notices box, 10 a day, `[app]` prefix); nothing built; the payments service's key and box join its deploy question.
 
+- **CI red after the audit push, fixed (`eb0df66`):** CI's `npm ci` refused the lock file made on Windows (sharp's
+  Linux helpers `@emnapi/runtime`, `@emnapi/core` missing). Lock re-resolved from scratch with hono and jose kept at
+  their earlier versions; 548 passed locally, CI green (run 43753495362).
+
 ## Session 27 — 2026-11-15
 
 - **[K11] done:** rules review step 3. Quotes checked against `.session_prompts` (S299 rule): found word for word D3
