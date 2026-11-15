@@ -49,8 +49,8 @@ design keeps a second destination addable, and every inbound mail is data, never
    step at the mail provider beyond turning the forward on. The original stays in the app mailbox (the forward keeps a
    copy: checked in task 1), so a dropped mail is never lost. The list is a table edited in the admin panel, not a
    setting, so changing it needs no deploy; the repository is public and names no vendor, so the list is never
-   committed. A domain matches itself and its subdomains (`getsentry.com` covers `md.getsentry.com`), never a longer
-   name (`apple.com` does not cover `appleid.com`, where hidden Apple addresses live). The filter applies to forwarded
+   committed. A domain matches itself and its subdomains (`example.com` covers `mail.example.com`), never a longer
+   name (`example.com` does not cover `myexample.com`). The filter applies to forwarded
    mailbox copies only: a reply carries a token Ulak signed, so it answers a mail Ulak sent.
 2. **Dropped mail leaves a count, not a copy:** per app, per day, per denied domain; no address, subject or text.
 3. **A receipt confirmation goes to every inbound mail** (a reply or a forwarded copy) and to every support-form
