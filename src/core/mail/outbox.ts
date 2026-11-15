@@ -156,6 +156,7 @@ export async function attemptMail(db: D1Database, cfg: MailConfig, row: MailRow,
   }, transport);
   const done = nowIso();
   const attempts = row.attempts + 1;
+  // status='queued' and the lease each guard alone; both are kept, as a closing event also clears the lease.
   const held = "WHERE id=? AND status='queued' AND lease_until=?";
   let write: D1PreparedStatement;
   let status: MailStatus;
@@ -204,6 +205,7 @@ export async function giveUpExpired(db: D1Database, now: string): Promise<MailRo
     ).results.map((r) => r.id),
   );
   const given = rows.filter((r) => changed.has(r.id));
+  // Opened here at once; legal.ts's repairLegal sweep opens the same alert only for one a stopped Worker lost.
   for (const r of given) if (r.kind === "legal_document") await openAlert(db, r.id, "given_up", now);
   return given.map((r) => ({ ...r, status: "given_up" as const }));
 }

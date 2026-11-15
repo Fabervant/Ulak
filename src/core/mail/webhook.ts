@@ -100,6 +100,7 @@ function parseOne(raw: unknown, text: string): MailEvent {
   if (/hard ?bounce/.test(object)) return { type: "hardbounce", ref, requestId, reason };
   if (/soft ?bounce/.test(object)) return { type: "softbounce", ref, requestId, reason };
   if (/fbl|complaint|feedback/.test(object)) return { type: "complaint", ref, requestId, reason };
+  // The whole delivered event is kept as the vendor sent it, by the operations ruling (S286); the live one read in S21 held no address.
   if (/deliver/.test(object) && !/undeliver/.test(object)) return { type: "delivered", ref, requestId, server: receivingServer(details), raw: text };
   return { type: "ignored" };
 }

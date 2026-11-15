@@ -521,6 +521,7 @@ export function keepCutoff(now: string, years: number): string {
  *  the second date never holds it longer (FabervantOps S325). */
 export async function purgeLegal(db: D1Database, keepYears: number, now: string): Promise<number> {
   const due = db
+    // The sending-year bound binds only if an end were before the send, which the end call refuses; kept as the TTK floor.
     .prepare(`SELECT mail_id FROM legal_documents WHERE COALESCE(sent_at, created_at)<?1 AND keep_from<?1 LIMIT ${D1_MAX_PARAMS}`)
     .bind(keepCutoff(now, keepYears));
   let purged = 0;

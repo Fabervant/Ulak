@@ -83,6 +83,7 @@ export function readOauthCookie(value: string | undefined): { state?: string; no
   } catch {
     next = "/";
   }
+  // Cleaned again on read although the write cleaned it: a second layer against a forged cookie.
   return { state, nonce, verifier, next: panelPath(next) };
 }
 
