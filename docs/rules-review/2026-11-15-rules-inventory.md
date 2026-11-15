@@ -44,11 +44,11 @@ steps 2 and 3: DEL-O waits for the clean-room test, ASK and every ruling of his 
 | M1 | Open orders O1-O3, outside waits, to-dos | owner S5, S11-S23; operations S325 | todo.md | KEEP | his orders and the work list; the one to-do file (operations S303) |
 | M2 | Live state: what is deployed and set, test copies, rollback bookmark | - | ulak-live-state.md | KEEP | fact |
 | M3 | Test mail: `tmp/s20/test_mail.py`, one key per run; each further test mail needs his word | - | ulak-test-mail-method.md | KEEP | tool fact; "his word per mail" to be checked against his words in step 3 |
-| M4 | Zoho verify call and delivered-event shapes | - | ulak-vendor-webhook-shapes.md | KEEP | fact read live |
+| M4 | Mail vendor's verify call and delivered-event shapes | - | ulak-vendor-webhook-shapes.md | KEEP | fact read live |
 | M5 | Privacy values: vendor name and region words (EN, TR) | operations S278 | ulak-privacy-vendor-values.md | KEEP | operations' words |
 | M6 | Every privacy or legal change goes to operations first | - | ulak-privacy-vendor-values.md | MERGE | global CLAUDE.md: "All legal matters go to [operations] ... reviews every product's legal text in every locale, on every change" |
 | M7 | "Used for nothing else" depends on his Claude "Help improve Claude" being OFF | - | ulak-privacy-vendor-values.md | KEEP | fact a model cannot know |
-| M8 | Mail vendor renamed (ZeptoMail is Zoho CPaaS); docs path; credit terms; mail gate allows `cpaas.zoho.*` | - | ulak-mail-vendor-renamed.md | KEEP | fact |
+| M8 | Mail vendor renamed; its docs path; credit terms; the domain the mail gate allows | - | ulak-mail-vendor-renamed.md | KEEP | fact |
 | M9 | Parked: inbound mail to agents | owner S21 | ulak-parked-inbound-to-agents.md | KEEP | his words, parked |
 | M10 | Per-user limits exact, per-IP and reads approximate; never reopen | owner S3 | ulak-rate-limits-settled.md | KEEP | his ruling |
 | M11 | First client app: uses `/v1/notify`; never touch its code; tell it before contract changes | owner S4, S5 | first-client note | KEEP | client facts; "tell before change" is also in global "Another project's things" for removals, but contract changes are wider |

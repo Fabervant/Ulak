@@ -11,7 +11,7 @@
   failed) before the code; `npm test` 546 passed. Contract, self-hosting doc and privacy section B (operations' wording)
   updated. Letters: both clients told of the end call before it ships; operations got the whole page EN+TR
   (`{{CONTACT}}` ops@fabervant.com, storage region WEUR read live, support sections in Turkish for the first time) and
-  the correction that the Zoho "Save content" setting was read unticked in S20 (the S24 "never read" was wrong).
+  the correction that the mail vendor's "Save content" setting was read unticked in S20 (the S24 "never read" was wrong).
   Deploy waits on his word.
 - **[K6] done:** rules review step 1 (`308257e`): `docs/rules-review/2026-11-15-rules-inventory.md`, before figures
   (CLAUDE.md 1,723 B; MEMORY.md 2,374 B / 22 lines; 24 memory files; no lessons, skills or hooks) and 36 rows: KEEP 31,
