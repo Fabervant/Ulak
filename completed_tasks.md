@@ -1,5 +1,24 @@
 # Completed tasks
 
+## Session 30 — 2026-11-26
+
+- **[K15] done:** rules review gates audit (`90f56af`; `docs/rules-review/2026-11-26-gates-audit.md`). Eleven gates
+  judged on their record (92 CI runs, the S14-S29 transcripts, the refactor-mandate state); a fresh agent gave the
+  verdicts. Applied: `maxWorkers` reads the shared CPU pool's `CPU_SLOTS` first; pre-push gitleaks scans only the pushed
+  commits (planted key refused in a scratch clone; 8 s -> 0.6 s); the hygiene manifest also scans untracked files and the
+  committed copy of each changed file (the S25 hole: a name fixed only in the working tree passed locally); the name
+  check covers every text file, not notes only - its first run found two code comments in `src/core/mail/legal.ts`
+  naming another project, reworded. Not applied: a pre-commit name check (cost over benefit). 550 passed; CI green.
+  Report letter to operations.
+- **[K16] done:** the push check picks tests through the shared picker (`115a1d4`): `test-impact.json` maps changes to
+  three suites (hygiene, unit, mcp), run inside the CPU pool, every test when the shared tools are absent;
+  `scripts/test-impact.mjs`, its rules and its test deleted. Selection checked per change kind in a scratch clone.
+  546 passed; CI green.
+- **Mailbox:** 25 letters read, acted on and archived; answered the product-audience survey (Ulak has no outside users),
+  the step-counter, age, sign-in, deploy and repeating-job letters (none apply; Ulak's live instance has real users,
+  so a deploy stays the owner's), and a future notices-only client (fits `/v1/notify`; waits for its staging copy).
+- Memory note on the name check needing `git add` deleted: untracked files are scanned now.
+
 ## Session 29 — 2026-11-15
 
 - **[K13] done:** rules review step 5, tests (`bfafa3e`, `73ca1ef`; `docs/rules-review/2026-11-15-step-5-tests.md`).
