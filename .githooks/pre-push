@@ -1,6 +1,11 @@
 #!/bin/sh
-# Refuse to push if gitleaks finds a secret anywhere in history.
+# Refuse to push if gitleaks finds a secret in the commits being pushed (CI scans the whole history).
 GL=$(command -v gitleaks || echo "C:/fabervant/_tools/gitleaks/gitleaks.exe")
-"$GL" git --redact --no-banner . || { echo "pre-push: gitleaks found a secret; push refused"; exit 1; }
+ZERO=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$ZERO" ] && continue
+  if [ "$remote_sha" = "$ZERO" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
+  "$GL" git --redact --no-banner --log-opts="$range" . || { echo "pre-push: gitleaks found a secret; push refused"; exit 1; }
+done
 # Refuse to push if a test this change can affect fails; CI confirms, it should not discover.
 npm run test:impact || { echo "pre-push: a test failed; push refused"; exit 1; }

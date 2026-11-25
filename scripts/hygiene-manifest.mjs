@@ -1,15 +1,21 @@
-// Writes test/hygiene-manifest.json: every committed text file and its content, so the hygiene
-// test (which runs inside the Workers runtime and has no filesystem) can scan the repository.
-import { execSync } from "node:child_process";
+// Writes test/hygiene-manifest.json so the hygiene test (which runs inside the Workers runtime and has no
+// filesystem) can scan what this repository publishes: every text file of the working tree that git does
+// not ignore, untracked ones included, and - keyed `HEAD:<path>` - the committed copy of each one whose
+// committed text differs, because a push publishes the commits, not the working tree.
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
-// A tracked file deleted but not yet staged is still listed by `git ls-files`; it has no content
-// left to scan, so it is skipped rather than crashing the hygiene, typecheck and test scripts.
-const files = execSync("git ls-files", { encoding: "utf8" })
-  .split("\n")
-  .filter((f) => f && /\.(md|ts|mjs|json|jsonc|toml|yml|sql|example|sh)$/.test(f) && !f.endsWith("hygiene-manifest.json") && !f.endsWith("package-lock.json") && !f.startsWith("test/fixtures"))
-  .filter((f) => existsSync(f));
+const git = (...args) => execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+const scanned = (f) => f && /\.(md|ts|mjs|json|jsonc|toml|yml|sql|example|sh)$/.test(f) && !f.endsWith("hygiene-manifest.json") && !f.endsWith("package-lock.json") && !f.startsWith("test/fixtures");
+
 const out = {};
-for (const f of files) out[f] = readFileSync(f, "utf8");
+// A tracked file deleted but not yet staged is still listed; it has no working copy left to read.
+for (const f of git("ls-files", "--cached", "--others", "--exclude-standard").split("\n").filter(scanned)) {
+  if (existsSync(f)) out[f] = readFileSync(f, "utf8");
+}
+const headHas = (f) => git("ls-tree", "--name-only", "HEAD", "--", f).trim() !== "";
+for (const f of git("diff", "--name-only", "--no-renames", "HEAD").split("\n").filter(scanned)) {
+  if (headHas(f)) out[`HEAD:${f}`] = git("show", `HEAD:${f}`);
+}
 writeFileSync("test/hygiene-manifest.json", JSON.stringify(out, null, 0));
-console.log(`hygiene manifest: ${files.length} files`);
+console.log(`hygiene manifest: ${Object.keys(out).length} files`);

@@ -17,8 +17,9 @@ export default defineConfig(async () => {
     test: {
       include: ["test/**/*.test.ts"],
       setupFiles: ["./test/setup.ts"],
-      // Fastest measured count on the 32-thread development machine; CI keeps its runner's default.
-      maxWorkers: process.env.CI ? undefined : 12,
+      // The shared CPU pool's share (CPU_SLOTS) first; else 12, the fastest measured count on the 32-thread
+      // development machine; CI keeps its runner's default.
+      maxWorkers: process.env.CI ? undefined : Number(process.env.CPU_SLOTS) || 12,
       // No test asserts on elapsed time, and the bulk ones outlast Vitest's 5 s on a busy machine.
       testTimeout: 30_000,
       // No test's stub reaches the next test (test/leakDetector.ts names what these cannot undo).

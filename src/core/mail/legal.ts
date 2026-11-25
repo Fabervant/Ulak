@@ -518,7 +518,7 @@ export function keepCutoff(now: string, years: number): string {
  *  Ulak accepted it. A subscription's copy is also kept to the end of the calendar year its
  *  subscription ended plus the same years (TBK art 146), whichever is later, and is never deleted
  *  while its end is unreported (`keep_from` null); a one-off copy's `keep_from` is its acceptance, so
- *  the second date never holds it longer (FabervantOps S325). */
+ *  the second date never holds it longer (operations S325). */
 export async function purgeLegal(db: D1Database, keepYears: number, now: string): Promise<number> {
   const due = db
     // The sending-year bound binds only if an end were before the send, which the end call refuses; kept as the TTK floor.
@@ -547,7 +547,7 @@ async function copiesWithoutEnd(db: D1Database, keepYears: number, now: string):
 }
 
 /** Once a legal calendar year, while any exist, the operator gets the count of `copiesWithoutEnd`
- *  per app, to ask those apps for their end calls (FabervantOps S325). Returns whether it was sent. */
+ *  per app, to ask those apps for their end calls (operations S325). Returns whether it was sent. */
 export async function reportCopiesWithoutEnd(env: Env, keepYears: number, now: string = nowIso()): Promise<boolean> {
   if (!channelFromEnv(env)) return false;
   const counts = await copiesWithoutEnd(env.DB, keepYears, now);
