@@ -7,5 +7,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$remote_sha" = "$ZERO" ]; then range="$local_sha"; else range="$remote_sha..$local_sha"; fi
   "$GL" git --redact --no-banner --log-opts="$range" . || { echo "pre-push: gitleaks found a secret; push refused"; exit 1; }
 done
-# Refuse to push if a test this change can affect fails; CI confirms, it should not discover.
-npm run test:impact || { echo "pre-push: a test failed; push refused"; exit 1; }
+# Refuse to push if a test this change can affect fails; CI confirms, it should not discover. The shared
+# picker reads test-impact.json and runs inside the shared CPU pool; without them, every test runs.
+HOOKS="$HOME/.claude/hooks"
+if [ -f "$HOOKS/pick_tests.py" ] && [ -f "$HOOKS/cpu_pool.py" ]; then
+  python "$HOOKS/cpu_pool.py" run -- python "$HOOKS/pick_tests.py"
+else
+  npm test
+fi || { echo "pre-push: a test failed; push refused"; exit 1; }

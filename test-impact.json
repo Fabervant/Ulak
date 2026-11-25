@@ -1,0 +1,21 @@
+{
+ "workers": 12,
+ "suites": {
+  "hygiene": [["node", "scripts/hygiene-manifest.mjs"], ["npx", "vitest", "run", "--reporter", "verbose", "test/docs.test.ts"]],
+  "unit": [["npm", "test", "--", "--maxWorkers={workers}"]],
+  "mcp": [["npm", "--prefix", "mcp", "run", "build"], ["npm", "--prefix", "mcp", "test"]]
+ },
+ "global": ["package.json", "package-lock.json", "tsconfig.json", "vitest.config.ts", "wrangler.test.jsonc",
+            "migrations/", "test/setup.ts", "test/helpers.ts", "test/fixtures/", ".github/", "scripts/", ".githooks/"],
+ "none": ["LICENSE"],
+ "map": [
+  ["mcp/", ["mcp", "hygiene"]],
+  ["src/", ["unit"]],
+  ["test/", ["unit"]],
+  ["docs/", ["hygiene"]],
+  ["*.md", ["hygiene"]],
+  ["*.example", ["hygiene"]],
+  [".gitleaks.toml", ["hygiene"]],
+  [".gitignore", ["hygiene"]]
+ ]
+}
